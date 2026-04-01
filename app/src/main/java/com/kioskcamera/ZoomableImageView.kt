@@ -6,7 +6,6 @@ import android.content.Context
 import android.graphics.Matrix
 import android.graphics.PointF
 import android.util.AttributeSet
-import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.animation.DecelerateInterpolator
@@ -39,6 +38,10 @@ class ZoomableImageView @JvmOverloads constructor(
     private var scaleAnimator: ValueAnimator? = null
     private val scroller = OverScroller(context)
 
+    // Manual double-tap detection
+    private var lastClickTime = 0L
+    private val lastClickPoint = PointF()
+
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
@@ -53,6 +56,7 @@ class ZoomableImageView @JvmOverloads constructor(
             }
 
             override fun onScaleEnd(detector: ScaleGestureDetector) {
+                mode = DRAG
                 if (saveScale <= minScale) {
                     parent?.requestDisallowInterceptTouchEvent(false)
                 }
@@ -60,61 +64,6 @@ class ZoomableImageView @JvmOverloads constructor(
         }).also {
         it.isQuickScaleEnabled = false
     }
-
-    private val gestureDetector = GestureDetector(context,
-        object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                scaleAnimator?.cancel()
-                if (saveScale > 1.05f) {
-                    // Zoom out to fit
-                    val startScale = saveScale
-                    scaleAnimator = ValueAnimator.ofFloat(startScale, 1f).apply {
-                        duration = 250
-                        interpolator = DecelerateInterpolator()
-                        addUpdateListener {
-                            scaleImageTo(width / 2f, height / 2f, it.animatedValue as Float)
-                        }
-                        start()
-                    }
-                } else {
-                    // Zoom in to 3x at tap point
-                    scaleAnimator = ValueAnimator.ofFloat(1f, 3f).apply {
-                        duration = 250
-                        interpolator = DecelerateInterpolator()
-                        addUpdateListener {
-                            scaleImageTo(e.x, e.y, it.animatedValue as Float)
-                        }
-                        start()
-                    }
-                }
-                return true
-            }
-
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (saveScale <= 1.05f) return false
-
-                mMatrix.getValues(m)
-                val transX = m[Matrix.MTRANS_X]
-                val transY = m[Matrix.MTRANS_Y]
-
-                val contentWidth = origWidth * saveScale
-                val contentHeight = origHeight * saveScale
-
-                val minX = (viewWidth - contentWidth).toInt().coerceAtMost(0)
-                val maxX = 0.coerceAtLeast((viewWidth - contentWidth).toInt())
-                val minY = (viewHeight - contentHeight).toInt().coerceAtMost(0)
-                val maxY = 0.coerceAtLeast((viewHeight - contentHeight).toInt())
-
-                scroller.fling(
-                    transX.toInt(), transY.toInt(),
-                    velocityX.toInt(), velocityY.toInt(),
-                    minX, maxX, minY, maxY,
-                    30, 30
-                )
-                postOnAnimation(flingRunnable)
-                return true
-            }
-        })
 
     private val flingRunnable = object : Runnable {
         override fun run() {
@@ -133,6 +82,53 @@ class ZoomableImageView @JvmOverloads constructor(
     init {
         scaleType = ScaleType.MATRIX
         imageMatrix = mMatrix
+    }
+
+    private fun onDoubleTap(x: Float, y: Float) {
+        scaleAnimator?.cancel()
+        if (saveScale > 1.05f) {
+            scaleAnimator = ValueAnimator.ofFloat(saveScale, 1f).apply {
+                duration = 250
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    scaleImageTo(width / 2f, height / 2f, it.animatedValue as Float)
+                }
+                start()
+            }
+        } else {
+            scaleAnimator = ValueAnimator.ofFloat(1f, 3f).apply {
+                duration = 250
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    scaleImageTo(x, y, it.animatedValue as Float)
+                }
+                start()
+            }
+        }
+    }
+
+    private fun doFling(velocityX: Float, velocityY: Float) {
+        if (saveScale <= 1.05f) return
+
+        mMatrix.getValues(m)
+        val transX = m[Matrix.MTRANS_X]
+        val transY = m[Matrix.MTRANS_Y]
+
+        val contentWidth = origWidth * saveScale
+        val contentHeight = origHeight * saveScale
+
+        val minX = (viewWidth - contentWidth).toInt().coerceAtMost(0)
+        val maxX = 0.coerceAtLeast((viewWidth - contentWidth).toInt())
+        val minY = (viewHeight - contentHeight).toInt().coerceAtMost(0)
+        val maxY = 0.coerceAtLeast((viewHeight - contentHeight).toInt())
+
+        scroller.fling(
+            transX.toInt(), transY.toInt(),
+            velocityX.toInt(), velocityY.toInt(),
+            minX, maxX, minY, maxY,
+            30, 30
+        )
+        postOnAnimation(flingRunnable)
     }
 
     private fun scaleImageTo(pointX: Float, pointY: Float, newScale: Float) {
@@ -201,8 +197,10 @@ class ZoomableImageView @JvmOverloads constructor(
         scaleAnimator?.cancel()
         scroller.forceFinished(true)
         saveScale = 1f
+        mMatrix.reset()
         oldMeasuredWidth = 0
         oldMeasuredHeight = 0
+        imageMatrix = mMatrix
         requestLayout()
     }
 
@@ -215,14 +213,21 @@ class ZoomableImageView @JvmOverloads constructor(
         else transX < -1
     }
 
+    // Velocity tracking for fling
+    private var velocityTracker: android.view.VelocityTracker? = null
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
-        gestureDetector.onTouchEvent(event)
+
+        if (velocityTracker == null) {
+            velocityTracker = android.view.VelocityTracker.obtain()
+        }
+        velocityTracker?.addMovement(event)
 
         val curr = PointF(event.x, event.y)
 
-        when (event.action) {
+        when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 scaleAnimator?.cancel()
                 scroller.forceFinished(true)
@@ -245,8 +250,46 @@ class ZoomableImageView @JvmOverloads constructor(
                 }
                 last.set(curr)
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+            MotionEvent.ACTION_POINTER_UP -> {
+                // When a finger lifts during multi-touch, stay in drag mode
+                // Update last to remaining finger position to prevent jump
+                val upIndex = event.actionIndex
+                val remainingIndex = if (upIndex == 0) 1 else 0
+                if (remainingIndex < event.pointerCount) {
+                    last.set(event.getX(remainingIndex), event.getY(remainingIndex))
+                }
+            }
+            MotionEvent.ACTION_UP -> {
                 mode = NONE
+
+                val xDiff = abs(curr.x - start.x)
+                val yDiff = abs(curr.y - start.y)
+
+                // Detect tap (small movement)
+                if (xDiff < CLICK_THRESHOLD && yDiff < CLICK_THRESHOLD) {
+                    val now = System.currentTimeMillis()
+                    val dx = abs(curr.x - lastClickPoint.x)
+                    val dy = abs(curr.y - lastClickPoint.y)
+
+                    if (now - lastClickTime < DOUBLE_TAP_DELAY && dx < CLICK_THRESHOLD * 3 && dy < CLICK_THRESHOLD * 3) {
+                        onDoubleTap(curr.x, curr.y)
+                        lastClickTime = 0
+                    } else {
+                        lastClickTime = now
+                        lastClickPoint.set(curr)
+                    }
+                } else if (saveScale > 1.05f) {
+                    // Fling
+                    velocityTracker?.computeCurrentVelocity(1000)
+                    val vx = velocityTracker?.xVelocity ?: 0f
+                    val vy = velocityTracker?.yVelocity ?: 0f
+                    if (abs(vx) > 50 || abs(vy) > 50) {
+                        doFling(vx, vy)
+                    }
+                }
+
+                velocityTracker?.recycle()
+                velocityTracker = null
             }
         }
 
@@ -294,5 +337,7 @@ class ZoomableImageView @JvmOverloads constructor(
         private const val NONE = 0
         private const val DRAG = 1
         private const val ZOOM = 2
+        private const val CLICK_THRESHOLD = 10f
+        private const val DOUBLE_TAP_DELAY = 300L
     }
 }
