@@ -1,35 +1,28 @@
 package com.kioskcamera
 
-import android.graphics.Matrix
 import android.os.Bundle
-import android.view.GestureDetector
-import android.view.MotionEvent
-import android.view.ScaleGestureDetector
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
 class PhotoViewerActivity : AppCompatActivity() {
 
-    private lateinit var imageView: ImageView
+    private lateinit var pager: ViewPager2
     private lateinit var infoText: TextView
     private lateinit var counterText: TextView
-    private var photos: List<File> = emptyList()
-    private var currentIndex = 0
+    private var photos: MutableList<File> = mutableListOf()
 
-    private var scaleFactor = 1f
-    private var lastTouchX = 0f
-    private var lastTouchY = 0f
-    private var panX = 0f
-    private var panY = 0f
-    private var activePointerId = MotionEvent.INVALID_POINTER_ID
+    private val currentIndex: Int get() = pager.currentItem
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,14 +32,13 @@ class PhotoViewerActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_photo_viewer)
 
-        imageView = findViewById(R.id.fullImage)
+        pager = findViewById(R.id.photoPager)
         infoText = findViewById(R.id.photoInfo)
         counterText = findViewById(R.id.photoCounter)
 
         val startFile = intent.getStringExtra("photo_path") ?: run { finish(); return }
 
         loadPhotos(startFile)
-        setupGestures()
         setupControls()
     }
 
@@ -54,191 +46,87 @@ class PhotoViewerActivity : AppCompatActivity() {
         val queueDir = File(filesDir, "upload_queue")
         photos = queueDir.listFiles { f -> f.extension == "jpg" }
             ?.sortedByDescending { it.lastModified() }
-            ?.toList() ?: emptyList()
+            ?.toMutableList() ?: mutableListOf()
 
-        currentIndex = photos.indexOfFirst { it.absolutePath == startPath }.coerceAtLeast(0)
-        showCurrentPhoto()
+        val startIndex = photos.indexOfFirst { it.absolutePath == startPath }.coerceAtLeast(0)
+
+        pager.adapter = PhotoPagerAdapter(photos)
+        pager.setCurrentItem(startIndex, false)
+        updateInfo(startIndex)
+
+        pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                updateInfo(position)
+                // Reset zoom on the previous page's ZoomableImageView
+                resetZoomOnAllPages()
+            }
+        })
     }
 
-    private fun showCurrentPhoto() {
-        if (photos.isEmpty()) { finish(); return }
+    private fun resetZoomOnAllPages() {
+        val rv = pager.getChildAt(0) as? RecyclerView ?: return
+        for (i in 0 until rv.childCount) {
+            val ziv = rv.getChildAt(i)?.findViewById<ZoomableImageView>(R.id.zoomableImage)
+            ziv?.resetTransform()
+        }
+    }
 
-        val file = photos[currentIndex]
-        val bitmap = decodeBitmapWithRotation(file.absolutePath)
-        imageView.setImageBitmap(bitmap)
-        resetTransform()
-
+    private fun updateInfo(position: Int) {
+        if (position < 0 || position >= photos.size) return
+        val file = photos[position]
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         val size = file.length() / 1024
         infoText.text = "${sdf.format(Date(file.lastModified()))}  •  ${size}KB"
-        counterText.text = "${currentIndex + 1} / ${photos.size}"
+        counterText.text = "${position + 1} / ${photos.size}"
     }
 
     private fun setupControls() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-
-        findViewById<ImageButton>(R.id.deleteButton).setOnClickListener {
-            confirmDelete()
-        }
-
-        findViewById<ImageButton>(R.id.prevButton).setOnClickListener {
-            if (currentIndex > 0) {
-                currentIndex--
-                showCurrentPhoto()
-            }
-        }
-
-        findViewById<ImageButton>(R.id.nextButton).setOnClickListener {
-            if (currentIndex < photos.size - 1) {
-                currentIndex++
-                showCurrentPhoto()
-            }
-        }
+        findViewById<ImageButton>(R.id.deleteButton).setOnClickListener { confirmDelete() }
     }
 
     private fun confirmDelete() {
         if (photos.isEmpty()) return
-        val file = photos[currentIndex]
+        val idx = currentIndex
+        val file = photos[idx]
 
         AlertDialog.Builder(this)
             .setTitle("Delete photo?")
             .setMessage(file.name)
             .setPositiveButton("Delete") { _, _ ->
                 file.delete()
-                val newPhotos = photos.toMutableList()
-                newPhotos.removeAt(currentIndex)
-                photos = newPhotos
+                photos.removeAt(idx)
                 if (photos.isEmpty()) {
                     finish()
                 } else {
-                    currentIndex = currentIndex.coerceAtMost(photos.size - 1)
-                    showCurrentPhoto()
+                    pager.adapter?.notifyItemRemoved(idx)
+                    updateInfo(pager.currentItem.coerceAtMost(photos.size - 1))
                 }
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun resetTransform() {
-        scaleFactor = 1f
-        panX = 0f
-        panY = 0f
-        imageView.scaleType = ImageView.ScaleType.FIT_CENTER
-        imageView.scaleX = 1f
-        imageView.scaleY = 1f
-        imageView.translationX = 0f
-        imageView.translationY = 0f
-    }
+    class PhotoPagerAdapter(
+        private val photos: List<File>
+    ) : RecyclerView.Adapter<PhotoPagerAdapter.PhotoVH>() {
 
-    private fun applyTransform() {
-        imageView.scaleX = scaleFactor
-        imageView.scaleY = scaleFactor
-        imageView.translationX = panX
-        imageView.translationY = panY
-    }
-
-    private fun setupGestures() {
-        val scaleDetector = ScaleGestureDetector(this,
-            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean = true
-
-                override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    scaleFactor *= detector.scaleFactor
-                    scaleFactor = scaleFactor.coerceIn(1f, 8f)
-                    applyTransform()
-                    return true
-                }
-
-                override fun onScaleEnd(detector: ScaleGestureDetector) {
-                    if (scaleFactor < 1.05f) {
-                        resetTransform()
-                    }
-                }
-            })
-
-        val gestureDetector = GestureDetector(this,
-            object : GestureDetector.SimpleOnGestureListener() {
-                override fun onDoubleTap(e: MotionEvent): Boolean {
-                    if (scaleFactor > 1.05f) {
-                        resetTransform()
-                    } else {
-                        // Zoom to 3x centered on tap point
-                        scaleFactor = 3f
-                        val centerX = imageView.width / 2f
-                        val centerY = imageView.height / 2f
-                        panX = (centerX - e.x) * (scaleFactor - 1)
-                        panY = (centerY - e.y) * (scaleFactor - 1)
-                        applyTransform()
-                    }
-                    return true
-                }
-
-                override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                    if (scaleFactor > 1.1f) return false
-                    val dx = (e2.x - (e1?.x ?: e2.x))
-                    if (dx > 150 && currentIndex > 0) {
-                        currentIndex--
-                        showCurrentPhoto()
-                        return true
-                    } else if (dx < -150 && currentIndex < photos.size - 1) {
-                        currentIndex++
-                        showCurrentPhoto()
-                        return true
-                    }
-                    return false
-                }
-            })
-
-        imageView.setOnTouchListener { _, event ->
-            scaleDetector.onTouchEvent(event)
-            gestureDetector.onTouchEvent(event)
-
-            // Pan handling
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    activePointerId = event.getPointerId(0)
-                    lastTouchX = event.x
-                    lastTouchY = event.y
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (scaleFactor > 1.05f && !scaleDetector.isInProgress) {
-                        val pointerIndex = event.findPointerIndex(activePointerId)
-                        if (pointerIndex >= 0) {
-                            val x = event.getX(pointerIndex)
-                            val y = event.getY(pointerIndex)
-                            panX += x - lastTouchX
-                            panY += y - lastTouchY
-                            applyTransform()
-                            lastTouchX = x
-                            lastTouchY = y
-                        }
-                    }
-                }
-                MotionEvent.ACTION_POINTER_DOWN -> {
-                    // When second finger goes down, update tracking to avoid jump
-                    val newIndex = event.actionIndex
-                    activePointerId = event.getPointerId(newIndex)
-                    lastTouchX = event.getX(newIndex)
-                    lastTouchY = event.getY(newIndex)
-                }
-                MotionEvent.ACTION_POINTER_UP -> {
-                    val upIndex = event.actionIndex
-                    val upId = event.getPointerId(upIndex)
-                    if (upId == activePointerId) {
-                        // Switch to the remaining finger
-                        val newIndex = if (upIndex == 0) 1 else 0
-                        if (newIndex < event.pointerCount) {
-                            activePointerId = event.getPointerId(newIndex)
-                            lastTouchX = event.getX(newIndex)
-                            lastTouchY = event.getY(newIndex)
-                        }
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    activePointerId = MotionEvent.INVALID_POINTER_ID
-                }
-            }
-            true
+        class PhotoVH(view: View) : RecyclerView.ViewHolder(view) {
+            val imageView: ZoomableImageView = view.findViewById(R.id.zoomableImage)
         }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PhotoVH {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_photo_page, parent, false)
+            return PhotoVH(view)
+        }
+
+        override fun onBindViewHolder(holder: PhotoVH, position: Int) {
+            val bitmap = decodeBitmapWithRotation(photos[position].absolutePath)
+            holder.imageView.resetTransform()
+            holder.imageView.setImageBitmap(bitmap)
+        }
+
+        override fun getItemCount() = photos.size
     }
 }

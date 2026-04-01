@@ -4,12 +4,10 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <ImageView
-        android:id="@+id/fullImage"
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/photoPager"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="fitCenter"
-        android:contentDescription="Photo" />
+        android:layout_height="match_parent" />
 
     <!-- Top bar -->
     <LinearLayout
@@ -25,9 +23,8 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_revert"
-            android:contentDescription="Back"
-            android:tint="@android:color/white" />
+            android:src="@drawable/ic_arrow_back"
+            android:contentDescription="Back" />
 
         <TextView
             android:id="@+id/photoCounter"
@@ -43,55 +40,20 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_delete"
-            android:contentDescription="Delete"
-            android:tint="#FF4444" />
+            android:src="@drawable/ic_delete"
+            android:contentDescription="Delete" />
     </LinearLayout>
 
-    <!-- Bottom bar -->
-    <LinearLayout
+    <!-- Bottom info bar -->
+    <TextView
+        android:id="@+id/photoInfo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:background="#80000000"
-        android:padding="12dp">
-
-        <TextView
-            android:id="@+id/photoInfo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:paddingBottom="8dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <ImageButton
-                android:id="@+id/prevButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_previous"
-                android:contentDescription="Previous"
-                android:tint="@android:color/white"
-                android:layout_marginEnd="32dp" />
-
-            <ImageButton
-                android:id="@+id/nextButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_next"
-                android:contentDescription="Next"
-                android:tint="@android:color/white"
-                android:layout_marginStart="32dp" />
-        </LinearLayout>
-    </LinearLayout>
+        android:gravity="center"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp"
+        android:padding="12dp"
+        android:background="#80000000" />
 
 </FrameLayout>
