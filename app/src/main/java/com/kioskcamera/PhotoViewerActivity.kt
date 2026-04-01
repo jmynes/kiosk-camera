@@ -75,6 +75,7 @@ class PhotoViewerActivity : AppCompatActivity() {
         topBar.setOnTouchListener(consumeSwipe)
         floatingPlayPause.setOnTouchListener(consumeSwipe)
         floatingMute.setOnTouchListener(consumeSwipe)
+        videoSeekBar.setOnTouchListener(consumeSwipe)
 
         val startPath = intent.getStringExtra("photo_path")
             ?: intent.getStringExtra("video_path")
@@ -106,6 +107,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
             override fun onPageScrollStateChanged(state: Int) {
                 if (state == ViewPager2.SCROLL_STATE_IDLE) {
+                    pager.isUserInputEnabled = true
                     autoPlayCurrentVideo()
                 }
             }
@@ -229,6 +231,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     fun toggleControls() {
         controlsVisible = !controlsVisible
+        pager.isUserInputEnabled = true
         val vis = if (controlsVisible) View.VISIBLE else View.GONE
         topBar.visibility = vis
         bottomContainer.visibility = vis
