@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private var deviceRotation = Surface.ROTATION_0
 
     // Camera state
+    private var pendingRecordOnBind = false
     private var useFrontCamera = false
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var hdrEnabled = false
@@ -160,6 +161,13 @@ class MainActivity : AppCompatActivity() {
         captureButton.setOnClickListener {
             pulseButton(captureButton)
             onShutterPressed()
+        }
+        captureButton.setOnLongClickListener {
+            if (!isVideoMode && !isRecording) {
+                pendingRecordOnBind = true
+                setMode(true)
+            }
+            true
         }
         galleryButton.setOnClickListener {
             startActivity(Intent(this, GalleryActivity::class.java))
@@ -599,6 +607,11 @@ class MainActivity : AppCompatActivity() {
 
         if (exposureSlider.visibility == View.VISIBLE) {
             setupExposureSlider()
+        }
+
+        if (pendingRecordOnBind) {
+            pendingRecordOnBind = false
+            startRecording()
         }
     }
 
