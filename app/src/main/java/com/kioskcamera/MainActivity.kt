@@ -682,7 +682,19 @@ class MainActivity : AppCompatActivity() {
 
     // --- Photo Capture ---
 
+    private fun flashScreen() {
+        val flash = findViewById<View>(R.id.shutterFlash)
+        flash.alpha = 0.7f
+        flash.visibility = View.VISIBLE
+        flash.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction { flash.visibility = View.GONE }
+            .start()
+    }
+
     private fun takePhoto() {
+        flashScreen()
         val imageCapture = imageCapture ?: return
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
