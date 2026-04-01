@@ -10,6 +10,7 @@
         android:allowBackup="false"
         android:label="Kiosk Camera"
         android:theme="@style/Theme.KioskCamera"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
 
         <activity

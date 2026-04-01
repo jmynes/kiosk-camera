@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var uploadExecutor: ExecutorService
     private val handler = Handler(Looper.getMainLooper())
-    private val httpClient = OkHttpClient()
+    private lateinit var httpClient: OkHttpClient
     private var isDestroyed = false
     private lateinit var orientationListener: OrientationEventListener
     private var deviceRotation = Surface.ROTATION_0
@@ -93,8 +93,51 @@ class MainActivity : AppCompatActivity() {
     private lateinit var scaleGestureDetector: ScaleGestureDetector
     private lateinit var tapGestureDetector: GestureDetector
 
-    // TODO: Configure this to point to your server
-    private val uploadUrl = "http://192.168.1.100:8080/upload"
+    private val uploadUrl = BuildConfig.UPLOAD_URL
+
+    private fun createHttpClient(): OkHttpClient {
+        val url = java.net.URL(BuildConfig.UPLOAD_URL)
+        val builder = OkHttpClient.Builder()
+
+        try {
+            val cf = java.security.cert.CertificateFactory.getInstance("X.509")
+            val caInput = resources.openRawResource(R.raw.ca_cert)
+            val ca = cf.generateCertificate(caInput)
+            caInput.close()
+
+            val ks = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType())
+            ks.load(null, null)
+            ks.setCertificateEntry("ca", ca)
+
+            val tmf = javax.net.ssl.TrustManagerFactory.getInstance(
+                javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm()
+            )
+            tmf.init(ks)
+
+            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+            sslContext.init(null, tmf.trustManagers, null)
+            builder.sslSocketFactory(sslContext.socketFactory,
+                tmf.trustManagers[0] as javax.net.ssl.X509TrustManager)
+
+            // Hostname verifier for IP-based certs
+            builder.hostnameVerifier { _, session ->
+                try {
+                    val certs = session.peerCertificates
+                    certs.isNotEmpty()
+                } catch (e: Exception) { false }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set up SSL trust", e)
+        }
+
+        builder.certificatePinner(
+            okhttp3.CertificatePinner.Builder()
+                .add(url.host, BuildConfig.CERT_PIN)
+                .build()
+        )
+
+        return builder.build()
+    }
 
     companion object {
         private const val TAG = "KioskCamera"
@@ -129,6 +172,7 @@ class MainActivity : AppCompatActivity() {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         uploadExecutor = Executors.newSingleThreadExecutor()
+        httpClient = createHttpClient()
 
         setupZoomGesture()
         setupControls()
@@ -822,10 +866,14 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         return try {
+            Log.i(TAG, "Uploading ${file.name} to $uploadUrl")
             val response = httpClient.newCall(request).execute()
-            response.use { it.isSuccessful }
-        } catch (e: IOException) {
-            Log.w(TAG, "Upload failed: ${e.message}")
+            val success = response.isSuccessful
+            Log.i(TAG, "Upload response: ${response.code} ${response.message}")
+            response.close()
+            success
+        } catch (e: Exception) {
+            Log.e(TAG, "Upload exception: ${e.javaClass.simpleName}: ${e.message}", e)
             false
         }
     }

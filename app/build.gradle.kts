@@ -13,6 +13,15 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // For dev: uses ADB reverse port forward (adb reverse tcp:8443 tcp:8443)
+        // For prod: replace with actual server IP/hostname
+        buildConfigField("String", "UPLOAD_URL", "\"https://127.0.0.1:8443/upload\"")
+        buildConfigField("String", "CERT_PIN", "\"sha256/+tUcWyunJuT8RAAS/lyZPUPthJZz/wIwDDeqPzMjCZU=\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
