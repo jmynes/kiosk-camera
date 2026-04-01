@@ -12,7 +12,16 @@
     <com.kioskcamera.GridOverlayView
         android:id="@+id/gridOverlay"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <com.kioskcamera.FocusIndicatorView
+        android:id="@+id/focusIndicator"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false" />
 
     <!-- Zoom level indicator -->
     <TextView

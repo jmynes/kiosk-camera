@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var galleryButton: ImageButton
     private lateinit var statusText: TextView
     private lateinit var zoomText: TextView
+    private lateinit var focusIndicator: FocusIndicatorView
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
     private lateinit var cameraExecutor: ExecutorService
@@ -73,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         galleryButton = findViewById(R.id.galleryButton)
         statusText = findViewById(R.id.statusText)
         zoomText = findViewById(R.id.zoomText)
+        focusIndicator = findViewById(R.id.focusIndicator)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         uploadExecutor = Executors.newSingleThreadExecutor()
@@ -143,6 +145,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleTapToFocus(event: MotionEvent) {
         val cam = camera ?: return
+        Log.i(TAG, "Tap to focus at (${event.x}, ${event.y})")
+        focusIndicator.showAt(event.x, event.y)
         val factory = previewView.meteringPointFactory
         val point = factory.createPoint(event.x, event.y)
         val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
