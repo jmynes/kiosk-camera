@@ -24,10 +24,12 @@ class PhotoViewerActivity : AppCompatActivity() {
     private var photos: List<File> = emptyList()
     private var currentIndex = 0
 
-    private val matrix = Matrix()
     private var scaleFactor = 1f
-    private var translateX = 0f
-    private var translateY = 0f
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var panX = 0f
+    private var panY = 0f
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,12 +66,7 @@ class PhotoViewerActivity : AppCompatActivity() {
         val file = photos[currentIndex]
         val bitmap = decodeBitmapWithRotation(file.absolutePath)
         imageView.setImageBitmap(bitmap)
-
-        // Reset zoom
-        scaleFactor = 1f
-        translateX = 0f
-        translateY = 0f
-        imageView.scaleType = ImageView.ScaleType.FIT_CENTER
+        resetTransform()
 
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         val size = file.length() / 1024
@@ -122,32 +119,62 @@ class PhotoViewerActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun resetTransform() {
+        scaleFactor = 1f
+        panX = 0f
+        panY = 0f
+        imageView.scaleType = ImageView.ScaleType.FIT_CENTER
+        imageView.scaleX = 1f
+        imageView.scaleY = 1f
+        imageView.translationX = 0f
+        imageView.translationY = 0f
+    }
+
+    private fun applyTransform() {
+        imageView.scaleX = scaleFactor
+        imageView.scaleY = scaleFactor
+        imageView.translationX = panX
+        imageView.translationY = panY
+    }
+
     private fun setupGestures() {
         val scaleDetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean = true
+
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
                     scaleFactor *= detector.scaleFactor
-                    scaleFactor = scaleFactor.coerceIn(0.5f, 5f)
-                    imageView.scaleX = scaleFactor
-                    imageView.scaleY = scaleFactor
+                    scaleFactor = scaleFactor.coerceIn(1f, 8f)
+                    applyTransform()
                     return true
+                }
+
+                override fun onScaleEnd(detector: ScaleGestureDetector) {
+                    if (scaleFactor < 1.05f) {
+                        resetTransform()
+                    }
                 }
             })
 
         val gestureDetector = GestureDetector(this,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    // Reset zoom
-                    scaleFactor = 1f
-                    imageView.scaleX = 1f
-                    imageView.scaleY = 1f
-                    imageView.translationX = 0f
-                    imageView.translationY = 0f
+                    if (scaleFactor > 1.05f) {
+                        resetTransform()
+                    } else {
+                        // Zoom to 3x centered on tap point
+                        scaleFactor = 3f
+                        val centerX = imageView.width / 2f
+                        val centerY = imageView.height / 2f
+                        panX = (centerX - e.x) * (scaleFactor - 1)
+                        panY = (centerY - e.y) * (scaleFactor - 1)
+                        applyTransform()
+                    }
                     return true
                 }
 
                 override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                    if (scaleFactor > 1.1f) return false // Don't swipe when zoomed
+                    if (scaleFactor > 1.1f) return false
                     val dx = (e2.x - (e1?.x ?: e2.x))
                     if (dx > 150 && currentIndex > 0) {
                         currentIndex--
@@ -165,6 +192,52 @@ class PhotoViewerActivity : AppCompatActivity() {
         imageView.setOnTouchListener { _, event ->
             scaleDetector.onTouchEvent(event)
             gestureDetector.onTouchEvent(event)
+
+            // Pan handling
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    activePointerId = event.getPointerId(0)
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (scaleFactor > 1.05f && !scaleDetector.isInProgress) {
+                        val pointerIndex = event.findPointerIndex(activePointerId)
+                        if (pointerIndex >= 0) {
+                            val x = event.getX(pointerIndex)
+                            val y = event.getY(pointerIndex)
+                            panX += x - lastTouchX
+                            panY += y - lastTouchY
+                            applyTransform()
+                            lastTouchX = x
+                            lastTouchY = y
+                        }
+                    }
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    // When second finger goes down, update tracking to avoid jump
+                    val newIndex = event.actionIndex
+                    activePointerId = event.getPointerId(newIndex)
+                    lastTouchX = event.getX(newIndex)
+                    lastTouchY = event.getY(newIndex)
+                }
+                MotionEvent.ACTION_POINTER_UP -> {
+                    val upIndex = event.actionIndex
+                    val upId = event.getPointerId(upIndex)
+                    if (upId == activePointerId) {
+                        // Switch to the remaining finger
+                        val newIndex = if (upIndex == 0) 1 else 0
+                        if (newIndex < event.pointerCount) {
+                            activePointerId = event.getPointerId(newIndex)
+                            lastTouchX = event.getX(newIndex)
+                            lastTouchY = event.getY(newIndex)
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
+                }
+            }
             true
         }
     }
