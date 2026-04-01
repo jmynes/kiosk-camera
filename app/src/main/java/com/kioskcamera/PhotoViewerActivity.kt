@@ -27,9 +27,8 @@ class PhotoViewerActivity : AppCompatActivity() {
     private lateinit var counterText: TextView
     private lateinit var videoSeekBar: SeekBar
     private lateinit var videoTimeText: TextView
-    private lateinit var videoControlsRow: View
-    private lateinit var muteButton: TextView
-    private lateinit var playPauseText: TextView
+    private lateinit var floatingPlayPause: ImageButton
+    private lateinit var floatingMute: ImageButton
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var mediaFiles: MutableList<File> = mutableListOf()
     private var isMuted = false
@@ -49,11 +48,10 @@ class PhotoViewerActivity : AppCompatActivity() {
         counterText = findViewById(R.id.photoCounter)
         videoSeekBar = findViewById(R.id.videoSeekBar)
         videoTimeText = findViewById(R.id.videoTimeText)
-        videoControlsRow = findViewById(R.id.videoControlsRow)
-        muteButton = findViewById(R.id.muteButton)
-        muteButton.setOnClickListener { toggleMute() }
-        playPauseText = findViewById(R.id.playPauseText)
-        playPauseText.setOnClickListener { toggleCurrentVideo() }
+        floatingPlayPause = findViewById(R.id.floatingPlayPause)
+        floatingPlayPause.setOnClickListener { toggleCurrentVideo() }
+        floatingMute = findViewById(R.id.floatingMute)
+        floatingMute.setOnClickListener { toggleMute() }
 
         val startPath = intent.getStringExtra("photo_path")
             ?: intent.getStringExtra("video_path")
@@ -114,7 +112,12 @@ class PhotoViewerActivity : AppCompatActivity() {
         counterText.text = "${position + 1} / ${mediaFiles.size}"
 
         videoSeekBar.visibility = if (isVideo) View.VISIBLE else View.GONE
-        videoControlsRow.visibility = if (isVideo) View.VISIBLE else View.GONE
+        videoTimeText.visibility = if (isVideo) View.VISIBLE else View.GONE
+        floatingPlayPause.visibility = if (isVideo) View.VISIBLE else View.GONE
+        floatingMute.visibility = if (isVideo) View.VISIBLE else View.GONE
+        if (isVideo) {
+            floatingPlayPause.setImageResource(R.drawable.ic_play)
+        }
         handler.removeCallbacks(seekBarUpdater)
     }
 
@@ -154,14 +157,14 @@ class PhotoViewerActivity : AppCompatActivity() {
                     vh.videoView.pause()
                     vh.playPauseButton.visibility = View.VISIBLE
                     vh.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
-                    playPauseText.text = "PLAY"
+                    floatingPlayPause.setImageResource(R.drawable.ic_play)
                     onVideoStopped()
                 } else {
                     vh.videoView.visibility = View.VISIBLE
                     vh.thumbnail.visibility = View.GONE
                     vh.videoView.start()
                     vh.playPauseButton.visibility = View.GONE
-                    playPauseText.text = "PAUSE"
+                    floatingPlayPause.setImageResource(R.drawable.ic_pause)
                 }
                 break
             }
@@ -169,7 +172,7 @@ class PhotoViewerActivity : AppCompatActivity() {
     }
 
     fun updatePlayPauseState(playing: Boolean) {
-        playPauseText.text = if (playing) "PAUSE" else "PLAY"
+        floatingPlayPause.setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
     }
 
     fun onVideoStarted(videoView: VideoView) {
@@ -195,8 +198,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     private fun toggleMute() {
         isMuted = !isMuted
-        muteButton.text = if (isMuted) "UNMUTE" else "MUTE"
-        muteButton.setTextColor(if (isMuted) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+        floatingMute.setImageResource(if (isMuted) R.drawable.ic_volume_off else R.drawable.ic_volume_on)
     }
 
     // Mute is applied via onPreparedListener in the adapter and on toggle

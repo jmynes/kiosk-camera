@@ -40,6 +40,34 @@
             android:layout_height="40dp" />
     </LinearLayout>
 
+    <!-- Floating play/pause button (video only) -->
+    <ImageButton
+        android:id="@+id/floatingPlayPause"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="start|bottom"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="140dp"
+        android:background="#80000000"
+        android:src="@drawable/ic_play"
+        android:scaleType="centerInside"
+        android:contentDescription="Play/Pause"
+        android:visibility="gone" />
+
+    <!-- Floating mute button (video only) -->
+    <ImageButton
+        android:id="@+id/floatingMute"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="140dp"
+        android:background="#80000000"
+        android:src="@drawable/ic_volume_on"
+        android:scaleType="centerInside"
+        android:contentDescription="Mute"
+        android:visibility="gone" />
+
     <!-- Bottom container -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -48,56 +76,17 @@
         android:orientation="vertical"
         android:background="#80000000">
 
-        <!-- Video controls: play | time | mute -->
-        <LinearLayout
-            android:id="@+id/videoControlsRow"
+        <!-- Video time + scrub bar -->
+        <TextView
+            android:id="@+id/videoTimeText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
             android:paddingTop="8dp"
-            android:visibility="gone">
+            android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/playPauseText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="PLAY"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:padding="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <TextView
-                android:id="@+id/videoTimeText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@android:color/white"
-                android:textSize="12sp" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <TextView
-                android:id="@+id/muteButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="MUTE"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:padding="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless" />
-        </LinearLayout>
-
-        <!-- Video scrub bar -->
         <SeekBar
             android:id="@+id/videoSeekBar"
             android:layout_width="match_parent"
