@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var isDestroyed = false
 
     private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private lateinit var tapGestureDetector: GestureDetector
 
     // TODO: Configure this to point to your server
     private val uploadUrl = "http://192.168.1.100:8080/upload"
@@ -76,7 +78,6 @@ class MainActivity : AppCompatActivity() {
         uploadExecutor = Executors.newSingleThreadExecutor()
 
         setupZoomGesture()
-        setupTapToFocus()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED) {
@@ -125,20 +126,19 @@ class MainActivity : AppCompatActivity() {
                 }
             })
 
+        tapGestureDetector = GestureDetector(this,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    handleTapToFocus(e)
+                    return true
+                }
+            })
+
         previewView.setOnTouchListener { v, event ->
             scaleGestureDetector.onTouchEvent(event)
-
-            // Tap to focus (only on single tap, not during pinch)
-            if (event.action == MotionEvent.ACTION_UP && !scaleGestureDetector.isInProgress) {
-                handleTapToFocus(event)
-            }
-            v.performClick()
+            tapGestureDetector.onTouchEvent(event)
             true
         }
-    }
-
-    private fun setupTapToFocus() {
-        // Handled in touch listener above
     }
 
     private fun handleTapToFocus(event: MotionEvent) {
