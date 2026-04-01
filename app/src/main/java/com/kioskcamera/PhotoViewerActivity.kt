@@ -32,6 +32,7 @@ class PhotoViewerActivity : AppCompatActivity() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var mediaFiles: MutableList<File> = mutableListOf()
     private var isMuted = false
+    private var activeMediaPlayer: android.media.MediaPlayer? = null
 
     private val currentIndex: Int get() = pager.currentItem
 
@@ -87,10 +88,8 @@ class PhotoViewerActivity : AppCompatActivity() {
         for (i in 0 until rv.childCount) {
             val vv = rv.getChildAt(i)?.findViewById<VideoView>(R.id.videoView)
             if (vv != null && vv.isPlaying) vv.pause()
-            val ppb = rv.getChildAt(i)?.findViewById<ImageButton>(R.id.playPauseButton)
-            ppb?.visibility = View.VISIBLE
-            ppb?.setImageResource(android.R.drawable.ic_media_play)
         }
+        updatePlayPauseState(false)
     }
 
     private fun resetZoomOnAllPages() {
@@ -155,16 +154,13 @@ class PhotoViewerActivity : AppCompatActivity() {
             if (vh is MediaPagerAdapter.VideoVH && vh.bindingAdapterPosition == pager.currentItem) {
                 if (vh.videoView.isPlaying) {
                     vh.videoView.pause()
-                    vh.playPauseButton.visibility = View.VISIBLE
-                    vh.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
-                    floatingPlayPause.setImageResource(R.drawable.ic_play)
+                    updatePlayPauseState(false)
                     onVideoStopped()
                 } else {
                     vh.videoView.visibility = View.VISIBLE
                     vh.thumbnail.visibility = View.GONE
                     vh.videoView.start()
-                    vh.playPauseButton.visibility = View.GONE
-                    floatingPlayPause.setImageResource(R.drawable.ic_pause)
+                    updatePlayPauseState(true)
                 }
                 break
             }
@@ -199,10 +195,9 @@ class PhotoViewerActivity : AppCompatActivity() {
     private fun toggleMute() {
         isMuted = !isMuted
         floatingMute.setImageResource(if (isMuted) R.drawable.ic_volume_off else R.drawable.ic_volume_on)
+        val vol = if (isMuted) 0f else 1f
+        activeMediaPlayer?.setVolume(vol, vol)
     }
-
-    // Mute is applied via onPreparedListener in the adapter and on toggle
-    // by seeking to current position which re-triggers prepare
 
     private fun setupControls() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
@@ -255,7 +250,6 @@ class PhotoViewerActivity : AppCompatActivity() {
 
         class VideoVH(view: View) : RecyclerView.ViewHolder(view) {
             val videoView: VideoView = view.findViewById(R.id.videoView)
-            val playPauseButton: ImageButton = view.findViewById(R.id.playPauseButton)
             val thumbnail: ImageView = view.findViewById(R.id.videoThumbnail)
         }
 
@@ -298,40 +292,31 @@ class PhotoViewerActivity : AppCompatActivity() {
 
                     holder.videoView.visibility = View.INVISIBLE
                     holder.videoView.setVideoURI(Uri.fromFile(file))
-                    holder.playPauseButton.visibility = View.VISIBLE
-                    holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
 
                     holder.videoView.setOnPreparedListener { mp ->
-                        mp.setVolume(
-                            if (activity.isMuted) 0f else 1f,
-                            if (activity.isMuted) 0f else 1f
-                        )
-                        // Duration is now available
+                        activity.activeMediaPlayer = mp
+                        val vol = if (activity.isMuted) 0f else 1f
+                        mp.setVolume(vol, vol)
                         activity.onVideoStarted(holder.videoView)
                     }
 
                     val togglePlay = {
                         if (holder.videoView.isPlaying) {
                             holder.videoView.pause()
-                            holder.playPauseButton.visibility = View.VISIBLE
-                            holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
                             activity.updatePlayPauseState(false)
                             activity.onVideoStopped()
                         } else {
                             holder.videoView.visibility = View.VISIBLE
                             holder.thumbnail.visibility = View.GONE
                             holder.videoView.start()
-                            holder.playPauseButton.visibility = View.GONE
                             activity.updatePlayPauseState(true)
                         }
                     }
 
-                    holder.playPauseButton.setOnClickListener { togglePlay() }
                     holder.videoView.setOnClickListener { togglePlay() }
 
                     holder.videoView.setOnCompletionListener {
-                        holder.playPauseButton.visibility = View.VISIBLE
-                        holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                        activity.updatePlayPauseState(false)
                         activity.onVideoStopped()
                     }
                 }
