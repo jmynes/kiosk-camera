@@ -1,16 +1,9 @@
 package com.kioskcamera
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.media.ThumbnailUtils
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.LruCache
-import android.util.Size
-import java.util.concurrent.Executors
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,11 +25,8 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var adapter: PhotoAdapter
 
-    companion object {
-        val thumbCache = LruCache<String, Bitmap>(100)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
+        ThumbnailCache.init(cacheDir)
         super.onCreate(savedInstanceState)
 
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
@@ -108,7 +98,7 @@ class GalleryActivity : AppCompatActivity() {
             .setMessage("This will remove all queued photos and videos.")
             .setPositiveButton("Delete All") { _, _ ->
                 getQueueDir().listFiles()?.forEach { it.delete() }
-                thumbCache.evictAll()
+                ThumbnailCache.clearAll()
                 refreshPhotos()
             }
             .setNegativeButton("Cancel", null)
@@ -133,9 +123,6 @@ class GalleryActivity : AppCompatActivity() {
         private val onLongPress: (File) -> Unit
     ) : RecyclerView.Adapter<PhotoAdapter.ViewHolder>() {
 
-        private val executor = Executors.newFixedThreadPool(3)
-        private val mainHandler = Handler(Looper.getMainLooper())
-
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val imageView: ImageView = view.findViewById(R.id.thumbImage)
             val timeText: TextView = view.findViewById(R.id.timeText)
@@ -153,31 +140,8 @@ class GalleryActivity : AppCompatActivity() {
             val path = file.absolutePath
             holder.currentPath = path
 
-            // Show placeholder immediately
             holder.imageView.setImageDrawable(ColorDrawable(Color.DKGRAY))
-
-            // Check cache
-            val cached = thumbCache.get(path)
-            if (cached != null) {
-                holder.imageView.setImageBitmap(cached)
-            } else {
-                // Load async
-                executor.execute {
-                    val bitmap = if (file.extension == "mp4") {
-                        ThumbnailUtils.createVideoThumbnail(file, Size(270, 270), null)
-                    } else {
-                        decodeBitmapWithRotation(file.absolutePath, sampleSize = 4)
-                    }
-                    if (bitmap != null) {
-                        thumbCache.put(path, bitmap)
-                        mainHandler.post {
-                            if (holder.currentPath == path) {
-                                holder.imageView.setImageBitmap(bitmap)
-                            }
-                        }
-                    }
-                }
-            }
+            ThumbnailCache.loadThumbnail(file, holder.imageView) { holder.currentPath }
 
             val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
             val label = if (file.extension == "mp4") "▶ " else ""
