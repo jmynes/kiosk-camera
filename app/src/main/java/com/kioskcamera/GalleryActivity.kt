@@ -57,12 +57,8 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun openViewer(file: File) {
         if (file.extension == "mp4") {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                this, "$packageName.fileprovider", file)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "video/mp4")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            val intent = Intent(this, VideoPlayerActivity::class.java)
+            intent.putExtra("video_path", file.absolutePath)
             startActivity(intent)
         } else {
             val intent = Intent(this, PhotoViewerActivity::class.java)
