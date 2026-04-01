@@ -36,9 +36,14 @@
             android:textColor="@android:color/white"
             android:textSize="16sp" />
 
-        <View
-            android:layout_width="40dp"
-            android:layout_height="40dp" />
+        <ImageButton
+            android:id="@+id/deleteButtonTop"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_delete"
+            android:scaleType="centerInside"
+            android:contentDescription="Delete" />
     </LinearLayout>
 
     <!-- Floating play/pause button (video only) -->
@@ -101,34 +106,14 @@
             android:visibility="gone" />
 
         <!-- Info row -->
-        <LinearLayout
+        <TextView
+            android:id="@+id/photoInfo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="8dp">
-
-            <View
-                android:layout_width="40dp"
-                android:layout_height="40dp" />
-
-            <TextView
-                android:id="@+id/photoInfo"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textColor="#CCCCCC"
-                android:textSize="13sp" />
-
-            <ImageButton
-                android:id="@+id/deleteButtonBottom"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_delete"
-                android:contentDescription="Delete" />
-        </LinearLayout>
+            android:gravity="center"
+            android:textColor="#CCCCCC"
+            android:textSize="13sp"
+            android:padding="12dp" />
 
     </LinearLayout>
 
