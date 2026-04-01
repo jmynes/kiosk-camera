@@ -187,27 +187,15 @@ class MainActivity : AppCompatActivity() {
                     handler.removeCallbacks(longPressRunnable)
 
                     if (longPressStartedFromPhoto) {
+                        revertToPhotoAfterRecording = true
                         if (isRecording) {
-                            val recordElapsed = System.currentTimeMillis() - longPressRecordingStartTime
-                            if (recordElapsed < 1000) {
-                                revertToPhotoAfterRecording = true
-                                activeRecording?.stop()
-                                activeRecording = null
-                            } else {
-                                stopRecording()
-                            }
+                            stopRecording()
                         } else {
-                            // Not recording yet (still binding or pending)
-                            // Set flag so it reverts once recording starts and immediately stops
                             pendingRecordOnBind = false
-                            revertToPhotoAfterRecording = true
-                            // If recording starts after this, it'll immediately stop via the flag
-                            // If it hasn't started, just revert now
                             handler.postDelayed({
                                 if (revertToPhotoAfterRecording && !isRecording) {
                                     revertToPhotoAfterRecording = false
                                     setMode(false)
-                                    pendingPhotoOnBind = true
                                 }
                             }, 500)
                         }
@@ -445,17 +433,25 @@ class MainActivity : AppCompatActivity() {
                             handler.removeCallbacks(timerUpdateRunnable)
                         }
                         val duration = System.currentTimeMillis() - recordingStartTime
-                        if (event.hasError() || revertToPhotoAfterRecording) {
-                            if (event.hasError()) Log.e(TAG, "Video recording error: ${event.error}")
+                        if (event.hasError()) {
+                            Log.e(TAG, "Video recording error: ${event.error}")
                             videoFile.delete()
-                            if (revertToPhotoAfterRecording) {
-                                revertToPhotoAfterRecording = false
+                            handler.post { showStatus("Recording failed") }
+                        } else if (revertToPhotoAfterRecording) {
+                            revertToPhotoAfterRecording = false
+                            if (duration < 1000) {
+                                videoFile.delete()
                                 handler.post {
                                     setMode(false)
                                     pendingPhotoOnBind = true
                                 }
                             } else {
-                                handler.post { showStatus("Recording failed") }
+                                Log.i(TAG, "Video saved: ${videoFile.absolutePath}")
+                                handler.post {
+                                    showStatus("Video saved")
+                                    updateGalleryThumbnail()
+                                    setMode(false)
+                                }
                             }
                         } else {
                             Log.i(TAG, "Video saved: ${videoFile.absolutePath}")
