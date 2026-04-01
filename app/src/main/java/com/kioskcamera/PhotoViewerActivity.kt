@@ -166,10 +166,15 @@ class PhotoViewerActivity : AppCompatActivity() {
         if (position < 0 || position >= mediaFiles.size) return
         val file = mediaFiles[position]
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        val size = file.length() / 1024
+        val bytes = file.length()
+        val sizeStr = when {
+            bytes >= 1024L * 1024 * 1024 -> String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+            bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+            else -> "${bytes / 1024} KB"
+        }
         val isVideo = file.extension == "mp4"
         val type = if (isVideo) "Video" else "Photo"
-        infoText.text = "$type  •  ${sdf.format(Date(file.lastModified()))}  •  ${size}KB"
+        infoText.text = "$type  •  ${sdf.format(Date(file.lastModified()))}  •  $sizeStr"
         counterText.text = "${position + 1} / ${mediaFiles.size}"
 
         videoSeekBar.visibility = if (isVideo) View.VISIBLE else View.GONE
