@@ -259,6 +259,7 @@ class MainActivity : AppCompatActivity() {
                     else -> Surface.ROTATION_90
                 }
                 imageCapture?.targetRotation = deviceRotation
+                videoCapture?.targetRotation = deviceRotation
             }
         }
         if (orientationListener.canDetectOrientation()) {
