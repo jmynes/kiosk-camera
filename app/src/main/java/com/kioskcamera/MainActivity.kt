@@ -50,10 +50,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var zoomText: TextView
     private lateinit var focusIndicator: FocusIndicatorView
-    private lateinit var flashButton: TextView
-    private lateinit var hdrButton: TextView
-    private lateinit var timerButton: TextView
-    private lateinit var switchCameraButton: TextView
+    private lateinit var flashButton: ImageButton
+    private lateinit var hdrButton: ImageButton
+    private lateinit var timerButton: ImageButton
+    private lateinit var switchCameraButton: ImageButton
     private lateinit var exposureSlider: SeekBar
     private lateinit var exposureText: TextView
     private lateinit var countdownText: TextView
@@ -219,6 +219,13 @@ class MainActivity : AppCompatActivity() {
 
         photoModeButton.setOnClickListener { setMode(false) }
         videoModeButton.setOnClickListener { setMode(true) }
+
+        flashButton.tooltipText = "Flash"
+        hdrButton.tooltipText = "Night mode"
+        timerButton.tooltipText = "Timer"
+        switchCameraButton.tooltipText = "Switch camera"
+        photoModeButton.tooltipText = "Photo"
+        videoModeButton.tooltipText = "Video"
     }
 
     // --- Mode Toggle ---
@@ -268,20 +275,24 @@ class MainActivity : AppCompatActivity() {
             else -> ImageCapture.FLASH_MODE_OFF
         }
         imageCapture?.flashMode = flashMode
-        // Toggle torch for video mode
         if (isVideoMode) {
             camera?.cameraControl?.enableTorch(flashMode == ImageCapture.FLASH_MODE_ON)
         }
         updateFlashButton()
+        showStatus(when (flashMode) {
+            ImageCapture.FLASH_MODE_AUTO -> "Flash: Auto"
+            ImageCapture.FLASH_MODE_ON -> if (isVideoMode) "Light: On" else "Flash: On"
+            else -> if (isVideoMode) "Light: Off" else "Flash: Off"
+        })
     }
 
     private fun updateFlashButton() {
-        flashButton.text = when (flashMode) {
-            ImageCapture.FLASH_MODE_AUTO -> if (isVideoMode) "LIGHT ON" else "FLASH AUTO"
-            ImageCapture.FLASH_MODE_ON -> if (isVideoMode) "LIGHT ON" else "FLASH ON"
-            else -> if (isVideoMode) "LIGHT OFF" else "FLASH OFF"
-        }
-        flashButton.setTextColor(
+        flashButton.setImageResource(when (flashMode) {
+            ImageCapture.FLASH_MODE_AUTO -> R.drawable.ic_flash_auto
+            ImageCapture.FLASH_MODE_ON -> R.drawable.ic_flash_on
+            else -> R.drawable.ic_flash_off
+        })
+        flashButton.setColorFilter(
             if (flashMode == ImageCapture.FLASH_MODE_OFF) 0xFFFFFFFF.toInt() else 0xFFFFD700.toInt()
         )
     }
@@ -290,23 +301,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleHdr() {
         if (!hdrAvailable) {
-            showStatus("HDR not available")
+            showStatus("Night mode not available")
             return
         }
         hdrEnabled = !hdrEnabled
         updateHdrButton()
+        showStatus(if (hdrEnabled) "Night mode: On" else "Night mode: Off")
         startCamera()
     }
 
     private fun updateHdrButton() {
-        hdrButton.setTextColor(
+        hdrButton.setColorFilter(
             when {
                 !hdrAvailable -> 0xFF555555.toInt()
                 hdrEnabled -> 0xFFFFD700.toInt()
                 else -> 0xFFFFFFFF.toInt()
             }
         )
-        hdrButton.text = if (hdrEnabled) "HDR ON" else "HDR"
     }
 
     // --- Timer ---
@@ -317,10 +328,17 @@ class MainActivity : AppCompatActivity() {
             3 -> 10
             else -> 0
         }
-        timerButton.text = if (timerSeconds == 0) "TIMER OFF" else "TIMER ${timerSeconds}s"
-        timerButton.setTextColor(
-            if (timerSeconds == 0) 0xFFFFFFFF.toInt() else 0xFFFFD700.toInt()
-        )
+        timerButton.setImageResource(when (timerSeconds) {
+            3 -> R.drawable.ic_timer_3
+            10 -> R.drawable.ic_timer_10
+            else -> R.drawable.ic_timer_off
+        })
+        timerButton.setColorFilter(when (timerSeconds) {
+            3 -> 0xFFFFD700.toInt()   // gold
+            10 -> 0xFFFF6B00.toInt()  // orange
+            else -> 0xFFFFFFFF.toInt() // white
+        })
+        showStatus(if (timerSeconds == 0) "Timer: Off" else "Timer: ${timerSeconds}s")
     }
 
     // --- Camera Switch ---
@@ -612,13 +630,13 @@ class MainActivity : AppCompatActivity() {
                     val extensionsManager = extensionsFuture.get()
 
                     hdrAvailable = extensionsManager.isExtensionAvailable(
-                        baseCameraSelector, ExtensionMode.HDR
+                        baseCameraSelector, ExtensionMode.NIGHT
                     )
                     updateHdrButton()
 
                     val cameraSelector = if (hdrEnabled && hdrAvailable) {
                         extensionsManager.getExtensionEnabledCameraSelector(
-                            baseCameraSelector, ExtensionMode.HDR
+                            baseCameraSelector, ExtensionMode.NIGHT
                         )
                     } else {
                         baseCameraSelector
