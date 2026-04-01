@@ -31,7 +31,7 @@ class PhotoViewerActivity : AppCompatActivity() {
     private lateinit var floatingMute: ImageButton
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var mediaFiles: MutableList<File> = mutableListOf()
-    private var isMuted = false
+    private var isMuted = true
     private var activeMediaPlayer: android.media.MediaPlayer? = null
     private var controlsVisible = true
     private lateinit var topBar: View
@@ -84,8 +84,46 @@ class PhotoViewerActivity : AppCompatActivity() {
                 updateInfo(position)
                 pauseAllVideos()
                 resetZoomOnAllPages()
+                showControls()
+            }
+
+            override fun onPageScrollStateChanged(state: Int) {
+                if (state == ViewPager2.SCROLL_STATE_IDLE) {
+                    autoPlayCurrentVideo()
+                }
             }
         })
+    }
+
+    private fun showControls() {
+        controlsVisible = true
+        topBar.visibility = View.VISIBLE
+        bottomContainer.visibility = View.VISIBLE
+        val isVideo = currentIndex < mediaFiles.size && mediaFiles[currentIndex].extension == "mp4"
+        if (isVideo) {
+            floatingPlayPause.visibility = View.VISIBLE
+            floatingMute.visibility = View.VISIBLE
+        }
+    }
+
+    private fun autoPlayCurrentVideo() {
+        val idx = pager.currentItem
+        if (idx < 0 || idx >= mediaFiles.size) return
+        if (mediaFiles[idx].extension != "mp4") return
+
+        val rv = pager.getChildAt(0) as? RecyclerView ?: return
+        for (i in 0 until rv.childCount) {
+            val vh = rv.getChildViewHolder(rv.getChildAt(i))
+            if (vh is MediaPagerAdapter.VideoVH && vh.bindingAdapterPosition == idx) {
+                if (!vh.videoView.isPlaying) {
+                    vh.videoView.visibility = View.VISIBLE
+                    vh.thumbnail.visibility = View.GONE
+                    vh.videoView.start()
+                    updatePlayPauseState(true)
+                }
+                break
+            }
+        }
     }
 
     private fun pauseAllVideos() {
