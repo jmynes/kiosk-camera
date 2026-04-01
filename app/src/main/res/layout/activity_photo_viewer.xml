@@ -35,43 +35,109 @@
             android:textColor="@android:color/white"
             android:textSize="16sp" />
 
-        <!-- Spacer to balance back button -->
         <View
             android:layout_width="40dp"
             android:layout_height="40dp" />
     </LinearLayout>
 
-    <!-- Bottom bar -->
+    <!-- Bottom container -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="8dp"
+        android:orientation="vertical"
         android:background="#80000000">
 
-        <!-- Spacer for symmetry -->
-        <View
-            android:layout_width="40dp"
-            android:layout_height="40dp" />
-
-        <TextView
-            android:id="@+id/photoInfo"
-            android:layout_width="0dp"
+        <!-- Video controls: play | time | mute -->
+        <LinearLayout
+            android:id="@+id/videoControlsRow"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp" />
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="8dp"
+            android:visibility="gone">
 
-        <ImageButton
-            android:id="@+id/deleteButtonBottom"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_delete"
-            android:contentDescription="Delete" />
+            <TextView
+                android:id="@+id/playPauseText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PLAY"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:padding="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/videoTimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@android:color/white"
+                android:textSize="12sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/muteButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MUTE"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:padding="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+        </LinearLayout>
+
+        <!-- Video scrub bar -->
+        <SeekBar
+            android:id="@+id/videoSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:progressDrawable="@drawable/seekbar_track"
+            android:thumb="@drawable/seekbar_thumb"
+            android:minHeight="4dp"
+            android:maxHeight="4dp"
+            android:visibility="gone" />
+
+        <!-- Info row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="8dp">
+
+            <View
+                android:layout_width="40dp"
+                android:layout_height="40dp" />
+
+            <TextView
+                android:id="@+id/photoInfo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp" />
+
+            <ImageButton
+                android:id="@+id/deleteButtonBottom"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_delete"
+                android:contentDescription="Delete" />
+        </LinearLayout>
 
     </LinearLayout>
 

@@ -1,5 +1,6 @@
 package com.kioskcamera
 
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -7,6 +8,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.VideoView
 import androidx.appcompat.app.AlertDialog
@@ -22,7 +25,14 @@ class PhotoViewerActivity : AppCompatActivity() {
     private lateinit var pager: ViewPager2
     private lateinit var infoText: TextView
     private lateinit var counterText: TextView
+    private lateinit var videoSeekBar: SeekBar
+    private lateinit var videoTimeText: TextView
+    private lateinit var videoControlsRow: View
+    private lateinit var muteButton: TextView
+    private lateinit var playPauseText: TextView
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var mediaFiles: MutableList<File> = mutableListOf()
+    private var isMuted = false
 
     private val currentIndex: Int get() = pager.currentItem
 
@@ -37,6 +47,13 @@ class PhotoViewerActivity : AppCompatActivity() {
         pager = findViewById(R.id.photoPager)
         infoText = findViewById(R.id.photoInfo)
         counterText = findViewById(R.id.photoCounter)
+        videoSeekBar = findViewById(R.id.videoSeekBar)
+        videoTimeText = findViewById(R.id.videoTimeText)
+        videoControlsRow = findViewById(R.id.videoControlsRow)
+        muteButton = findViewById(R.id.muteButton)
+        muteButton.setOnClickListener { toggleMute() }
+        playPauseText = findViewById(R.id.playPauseText)
+        playPauseText.setOnClickListener { toggleCurrentVideo() }
 
         val startPath = intent.getStringExtra("photo_path")
             ?: intent.getStringExtra("video_path")
@@ -54,7 +71,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
         val startIndex = mediaFiles.indexOfFirst { it.absolutePath == startPath }.coerceAtLeast(0)
 
-        pager.adapter = MediaPagerAdapter(mediaFiles)
+        pager.adapter = MediaPagerAdapter(mediaFiles, this)
         pager.setCurrentItem(startIndex, false)
         updateInfo(startIndex)
 
@@ -91,10 +108,99 @@ class PhotoViewerActivity : AppCompatActivity() {
         val file = mediaFiles[position]
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         val size = file.length() / 1024
-        val type = if (file.extension == "mp4") "Video" else "Photo"
+        val isVideo = file.extension == "mp4"
+        val type = if (isVideo) "Video" else "Photo"
         infoText.text = "$type  •  ${sdf.format(Date(file.lastModified()))}  •  ${size}KB"
         counterText.text = "${position + 1} / ${mediaFiles.size}"
+
+        videoSeekBar.visibility = if (isVideo) View.VISIBLE else View.GONE
+        videoControlsRow.visibility = if (isVideo) View.VISIBLE else View.GONE
+        handler.removeCallbacks(seekBarUpdater)
     }
+
+    private fun formatTime(ms: Int): String {
+        val secs = ms / 1000
+        return String.format("%d:%02d", secs / 60, secs % 60)
+    }
+
+    private fun getCurrentVideoView(): VideoView? {
+        val rv = pager.getChildAt(0) as? RecyclerView ?: return null
+        for (i in 0 until rv.childCount) {
+            val vh = rv.getChildViewHolder(rv.getChildAt(i))
+            if (vh is MediaPagerAdapter.VideoVH && vh.bindingAdapterPosition == pager.currentItem) {
+                return vh.videoView
+            }
+        }
+        return null
+    }
+
+    private val seekBarUpdater = object : Runnable {
+        override fun run() {
+            val vv = getCurrentVideoView()
+            if (vv != null && vv.isPlaying) {
+                videoSeekBar.progress = vv.currentPosition
+                videoTimeText.text = "${formatTime(vv.currentPosition)} / ${formatTime(vv.duration)}"
+                handler.postDelayed(this, 250)
+            }
+        }
+    }
+
+    private fun toggleCurrentVideo() {
+        val rv = pager.getChildAt(0) as? RecyclerView ?: return
+        for (i in 0 until rv.childCount) {
+            val vh = rv.getChildViewHolder(rv.getChildAt(i))
+            if (vh is MediaPagerAdapter.VideoVH && vh.bindingAdapterPosition == pager.currentItem) {
+                if (vh.videoView.isPlaying) {
+                    vh.videoView.pause()
+                    vh.playPauseButton.visibility = View.VISIBLE
+                    vh.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                    playPauseText.text = "PLAY"
+                    onVideoStopped()
+                } else {
+                    vh.videoView.visibility = View.VISIBLE
+                    vh.thumbnail.visibility = View.GONE
+                    vh.videoView.start()
+                    vh.playPauseButton.visibility = View.GONE
+                    playPauseText.text = "PAUSE"
+                }
+                break
+            }
+        }
+    }
+
+    fun updatePlayPauseState(playing: Boolean) {
+        playPauseText.text = if (playing) "PAUSE" else "PLAY"
+    }
+
+    fun onVideoStarted(videoView: VideoView) {
+        videoSeekBar.max = videoView.duration
+        videoSeekBar.progress = 0
+        videoTimeText.text = "0:00 / ${formatTime(videoView.duration)}"
+        videoSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    videoView.seekTo(progress)
+                    videoTimeText.text = "${formatTime(progress)} / ${formatTime(videoView.duration)}"
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar) {}
+        })
+        handler.post(seekBarUpdater)
+    }
+
+    fun onVideoStopped() {
+        handler.removeCallbacks(seekBarUpdater)
+    }
+
+    private fun toggleMute() {
+        isMuted = !isMuted
+        muteButton.text = if (isMuted) "UNMUTE" else "MUTE"
+        muteButton.setTextColor(if (isMuted) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+    }
+
+    // Mute is applied via onPreparedListener in the adapter and on toggle
+    // by seeking to current position which re-triggers prepare
 
     private fun setupControls() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
@@ -132,7 +238,8 @@ class PhotoViewerActivity : AppCompatActivity() {
     }
 
     class MediaPagerAdapter(
-        private val files: List<File>
+        private val files: List<File>,
+        private val activity: PhotoViewerActivity
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         companion object {
@@ -147,6 +254,7 @@ class PhotoViewerActivity : AppCompatActivity() {
         class VideoVH(view: View) : RecyclerView.ViewHolder(view) {
             val videoView: VideoView = view.findViewById(R.id.videoView)
             val playPauseButton: ImageButton = view.findViewById(R.id.playPauseButton)
+            val thumbnail: ImageView = view.findViewById(R.id.videoThumbnail)
         }
 
         override fun getItemViewType(position: Int): Int {
@@ -174,18 +282,45 @@ class PhotoViewerActivity : AppCompatActivity() {
                     holder.imageView.setImageBitmap(bitmap)
                 }
                 is VideoVH -> {
+                    // Load first frame as thumbnail
+                    try {
+                        val retriever = MediaMetadataRetriever()
+                        retriever.setDataSource(file.absolutePath)
+                        val frame = retriever.getFrameAtTime(0)
+                        holder.thumbnail.setImageBitmap(frame)
+                        holder.thumbnail.visibility = View.VISIBLE
+                        retriever.release()
+                    } catch (e: Exception) {
+                        holder.thumbnail.visibility = View.GONE
+                    }
+
+                    holder.videoView.visibility = View.INVISIBLE
                     holder.videoView.setVideoURI(Uri.fromFile(file))
                     holder.playPauseButton.visibility = View.VISIBLE
                     holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+
+                    holder.videoView.setOnPreparedListener { mp ->
+                        mp.setVolume(
+                            if (activity.isMuted) 0f else 1f,
+                            if (activity.isMuted) 0f else 1f
+                        )
+                        // Duration is now available
+                        activity.onVideoStarted(holder.videoView)
+                    }
 
                     val togglePlay = {
                         if (holder.videoView.isPlaying) {
                             holder.videoView.pause()
                             holder.playPauseButton.visibility = View.VISIBLE
                             holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                            activity.updatePlayPauseState(false)
+                            activity.onVideoStopped()
                         } else {
+                            holder.videoView.visibility = View.VISIBLE
+                            holder.thumbnail.visibility = View.GONE
                             holder.videoView.start()
                             holder.playPauseButton.visibility = View.GONE
+                            activity.updatePlayPauseState(true)
                         }
                     }
 
@@ -195,6 +330,7 @@ class PhotoViewerActivity : AppCompatActivity() {
                     holder.videoView.setOnCompletionListener {
                         holder.playPauseButton.visibility = View.VISIBLE
                         holder.playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                        activity.onVideoStopped()
                     }
                 }
             }
