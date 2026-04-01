@@ -4,8 +4,11 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.view.animation.DecelerateInterpolator
 import android.view.OrientationEventListener
 import android.view.Surface
 import android.os.Handler
@@ -154,7 +157,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        captureButton.setOnClickListener { onShutterPressed() }
+        captureButton.setOnClickListener {
+            pulseButton(captureButton)
+            onShutterPressed()
+        }
         galleryButton.setOnClickListener {
             startActivity(Intent(this, GalleryActivity::class.java))
         }
@@ -716,6 +722,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun startUploadLoop() {
         handler.postDelayed(uploadRunnable, UPLOAD_RETRY_INTERVAL_MS)
+    }
+
+    private fun pulseButton(view: View) {
+        val scaleDown = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.85f),
+                ObjectAnimator.ofFloat(view, "scaleY", 1f, 0.85f)
+            )
+            duration = 80
+        }
+        val scaleUp = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(view, "scaleX", 0.85f, 1f),
+                ObjectAnimator.ofFloat(view, "scaleY", 0.85f, 1f)
+            )
+            duration = 150
+            interpolator = DecelerateInterpolator()
+        }
+        AnimatorSet().apply {
+            playSequentially(scaleDown, scaleUp)
+            start()
+        }
     }
 
     private fun showStatus(message: String) {
