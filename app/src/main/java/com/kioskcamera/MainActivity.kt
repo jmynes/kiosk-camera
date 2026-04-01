@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -14,10 +15,13 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
+import androidx.camera.extensions.ExtensionMode
+import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
@@ -40,13 +44,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var zoomText: TextView
     private lateinit var focusIndicator: FocusIndicatorView
+    private lateinit var flashButton: TextView
+    private lateinit var hdrButton: TextView
+    private lateinit var timerButton: TextView
+    private lateinit var switchCameraButton: TextView
+    private lateinit var exposureSlider: SeekBar
+    private lateinit var exposureText: TextView
+    private lateinit var countdownText: TextView
+
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
+    private var cameraProvider: ProcessCameraProvider? = null
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var uploadExecutor: ExecutorService
     private val handler = Handler(Looper.getMainLooper())
     private val httpClient = OkHttpClient()
     private var isDestroyed = false
+
+    // Camera state
+    private var useFrontCamera = false
+    private var flashMode = ImageCapture.FLASH_MODE_OFF
+    private var hdrEnabled = false
+    private var hdrAvailable = false
+    private var timerSeconds = 0 // 0 = off, 3, 10
+    private var countdownTimer: CountDownTimer? = null
 
     private lateinit var scaleGestureDetector: ScaleGestureDetector
     private lateinit var tapGestureDetector: GestureDetector
@@ -75,22 +96,25 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         zoomText = findViewById(R.id.zoomText)
         focusIndicator = findViewById(R.id.focusIndicator)
+        flashButton = findViewById(R.id.flashButton)
+        hdrButton = findViewById(R.id.hdrButton)
+        timerButton = findViewById(R.id.timerButton)
+        switchCameraButton = findViewById(R.id.switchCameraButton)
+        exposureSlider = findViewById(R.id.exposureSlider)
+        exposureText = findViewById(R.id.exposureText)
+        countdownText = findViewById(R.id.countdownText)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         uploadExecutor = Executors.newSingleThreadExecutor()
 
         setupZoomGesture()
+        setupControls()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
-        }
-
-        captureButton.setOnClickListener { takePhoto() }
-        galleryButton.setOnClickListener {
-            startActivity(Intent(this, GalleryActivity::class.java))
         }
 
         startUploadLoop()
@@ -110,6 +134,115 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Camera permission required", Toast.LENGTH_LONG).show()
         }
     }
+
+    private fun setupControls() {
+        captureButton.setOnClickListener { onShutterPressed() }
+        galleryButton.setOnClickListener {
+            startActivity(Intent(this, GalleryActivity::class.java))
+        }
+
+        flashButton.setOnClickListener { cycleFlash() }
+        hdrButton.setOnClickListener { toggleHdr() }
+        timerButton.setOnClickListener { cycleTimer() }
+        switchCameraButton.setOnClickListener { switchCamera() }
+    }
+
+    // --- Flash ---
+
+    private fun cycleFlash() {
+        flashMode = when (flashMode) {
+            ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_AUTO
+            ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
+            else -> ImageCapture.FLASH_MODE_OFF
+        }
+        imageCapture?.flashMode = flashMode
+        updateFlashButton()
+    }
+
+    private fun updateFlashButton() {
+        flashButton.text = when (flashMode) {
+            ImageCapture.FLASH_MODE_AUTO -> "FLASH AUTO"
+            ImageCapture.FLASH_MODE_ON -> "FLASH ON"
+            else -> "FLASH OFF"
+        }
+        flashButton.setTextColor(
+            if (flashMode == ImageCapture.FLASH_MODE_OFF) 0xFFFFFFFF.toInt() else 0xFFFFD700.toInt()
+        )
+    }
+
+    // --- HDR ---
+
+    private fun toggleHdr() {
+        if (!hdrAvailable) {
+            showStatus("HDR not available")
+            return
+        }
+        hdrEnabled = !hdrEnabled
+        updateHdrButton()
+        startCamera() // Must rebind with extension
+    }
+
+    private fun updateHdrButton() {
+        hdrButton.setTextColor(
+            when {
+                !hdrAvailable -> 0xFF555555.toInt()
+                hdrEnabled -> 0xFFFFD700.toInt()
+                else -> 0xFFFFFFFF.toInt()
+            }
+        )
+        hdrButton.text = if (hdrEnabled) "HDR ON" else "HDR"
+    }
+
+    // --- Timer ---
+
+    private fun cycleTimer() {
+        timerSeconds = when (timerSeconds) {
+            0 -> 3
+            3 -> 10
+            else -> 0
+        }
+        timerButton.text = if (timerSeconds == 0) "TIMER OFF" else "TIMER ${timerSeconds}s"
+        timerButton.setTextColor(
+            if (timerSeconds == 0) 0xFFFFFFFF.toInt() else 0xFFFFD700.toInt()
+        )
+    }
+
+    // --- Camera Switch ---
+
+    private fun switchCamera() {
+        useFrontCamera = !useFrontCamera
+        startCamera()
+    }
+
+    // --- Shutter / Countdown ---
+
+    private fun onShutterPressed() {
+        if (timerSeconds == 0) {
+            takePhoto()
+        } else {
+            startCountdown()
+        }
+    }
+
+    private fun startCountdown() {
+        captureButton.isEnabled = false
+        countdownText.visibility = View.VISIBLE
+
+        countdownTimer?.cancel()
+        countdownTimer = object : CountDownTimer(timerSeconds * 1000L, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                val secondsLeft = (millisUntilFinished / 1000) + 1
+                countdownText.text = secondsLeft.toString()
+            }
+
+            override fun onFinish() {
+                countdownText.visibility = View.GONE
+                takePhoto()
+            }
+        }.start()
+    }
+
+    // --- Zoom + Focus Gestures ---
 
     private fun setupZoomGesture() {
         scaleGestureDetector = ScaleGestureDetector(this,
@@ -134,9 +267,15 @@ class MainActivity : AppCompatActivity() {
                     handleTapToFocus(e)
                     return true
                 }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    // Double tap toggles exposure slider visibility
+                    toggleExposureSlider()
+                    return true
+                }
             })
 
-        previewView.setOnTouchListener { v, event ->
+        previewView.setOnTouchListener { _, event ->
             scaleGestureDetector.onTouchEvent(event)
             tapGestureDetector.onTouchEvent(event)
             true
@@ -155,25 +294,113 @@ class MainActivity : AppCompatActivity() {
         cam.cameraControl.startFocusAndMetering(action)
     }
 
+    // --- Exposure Compensation ---
+
+    private fun toggleExposureSlider() {
+        if (exposureSlider.visibility == View.VISIBLE) {
+            exposureSlider.visibility = View.GONE
+            exposureText.visibility = View.GONE
+        } else {
+            setupExposureSlider()
+            exposureSlider.visibility = View.VISIBLE
+            exposureText.visibility = View.VISIBLE
+        }
+    }
+
+    private fun setupExposureSlider() {
+        val cam = camera ?: return
+        val state = cam.cameraInfo.exposureState
+        if (!state.isExposureCompensationSupported) {
+            showStatus("Exposure compensation not supported")
+            return
+        }
+
+        val range = state.exposureCompensationRange
+        val step = state.exposureCompensationStep.toFloat()
+
+        exposureSlider.max = range.upper - range.lower
+        exposureSlider.progress = state.exposureCompensationIndex - range.lower
+
+        updateExposureText(state.exposureCompensationIndex, step)
+
+        exposureSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val index = progress + range.lower
+                    cam.cameraControl.setExposureCompensationIndex(index)
+                    updateExposureText(index, step)
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar) {}
+        })
+    }
+
+    private fun updateExposureText(index: Int, step: Float) {
+        val ev = index * step
+        exposureText.text = when {
+            ev > 0 -> String.format("+%.1f EV", ev)
+            ev < 0 -> String.format("%.1f EV", ev)
+            else -> "0 EV"
+        }
+    }
+
+    // --- Camera Startup ---
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
+            val provider = cameraProviderFuture.get()
+            this.cameraProvider = provider
 
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+            val baseCameraSelector = if (useFrontCamera)
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            else
+                CameraSelector.DEFAULT_BACK_CAMERA
 
-            imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .build()
+            // Check HDR extension availability
+            val extensionsFuture = ExtensionsManager.getInstanceAsync(this, provider)
+            extensionsFuture.addListener({
+                val extensionsManager = extensionsFuture.get()
 
-            cameraProvider.unbindAll()
-            camera = cameraProvider.bindToLifecycle(
-                this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture
-            )
+                hdrAvailable = extensionsManager.isExtensionAvailable(
+                    baseCameraSelector, ExtensionMode.HDR
+                )
+                updateHdrButton()
+
+                val cameraSelector = if (hdrEnabled && hdrAvailable) {
+                    extensionsManager.getExtensionEnabledCameraSelector(
+                        baseCameraSelector, ExtensionMode.HDR
+                    )
+                } else {
+                    baseCameraSelector
+                }
+
+                bindCamera(provider, cameraSelector)
+            }, ContextCompat.getMainExecutor(this))
         }, ContextCompat.getMainExecutor(this))
     }
+
+    private fun bindCamera(provider: ProcessCameraProvider, cameraSelector: CameraSelector) {
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        imageCapture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setFlashMode(flashMode)
+            .build()
+
+        provider.unbindAll()
+        camera = provider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
+
+        // Reset exposure slider if visible
+        if (exposureSlider.visibility == View.VISIBLE) {
+            setupExposureSlider()
+        }
+    }
+
+    // --- Photo Capture ---
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
@@ -210,6 +437,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    // --- Gallery Thumbnail ---
+
     private fun updateGalleryThumbnail() {
         val files = getQueueDir().listFiles { f -> f.extension == "jpg" }
             ?.sortedByDescending { it.lastModified() }
@@ -221,6 +450,8 @@ class MainActivity : AppCompatActivity() {
             galleryButton.setImageDrawable(null)
         }
     }
+
+    // --- Upload Logic ---
 
     private fun getQueueDir(): File {
         val dir = File(filesDir, "upload_queue")
@@ -285,12 +516,12 @@ class MainActivity : AppCompatActivity() {
     private fun showStatus(message: String) {
         statusText.text = message
         statusText.visibility = View.VISIBLE
-        handler.removeCallbacksAndMessages("status")
         handler.postDelayed({ statusText.visibility = View.GONE }, 3000)
     }
 
     override fun onDestroy() {
         isDestroyed = true
+        countdownTimer?.cancel()
         handler.removeCallbacks(uploadRunnable)
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
