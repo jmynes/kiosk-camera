@@ -240,7 +240,7 @@ class MainActivity : AppCompatActivity() {
         captureButton.setBackgroundResource(if (video) R.drawable.record_button else R.drawable.shutter_button)
 
         // Hide timer/HDR in video mode
-        timerButton.visibility = if (video) View.GONE else View.VISIBLE
+        // Night mode only works with ImageCapture, not VideoCapture
         hdrButton.visibility = if (video) View.GONE else View.VISIBLE
 
         startCamera()
@@ -354,12 +354,18 @@ class MainActivity : AppCompatActivity() {
     private var countdownActive = false
 
     private fun onShutterPressed() {
-        if (isVideoMode) {
-            toggleRecording()
-            return
-        }
         if (countdownActive) {
             cancelCountdown()
+            return
+        }
+        if (isVideoMode) {
+            if (isRecording) {
+                stopRecording()
+            } else if (timerSeconds > 0) {
+                startCountdown()
+            } else {
+                startRecording()
+            }
             return
         }
         if (timerSeconds == 0) {
@@ -384,7 +390,11 @@ class MainActivity : AppCompatActivity() {
             override fun onFinish() {
                 countdownText.visibility = View.GONE
                 countdownActive = false
-                takePhoto()
+                if (isVideoMode) {
+                    startRecording()
+                } else {
+                    takePhoto()
+                }
             }
         }.start()
     }
