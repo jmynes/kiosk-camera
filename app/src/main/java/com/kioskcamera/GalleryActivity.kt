@@ -56,15 +56,9 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun openViewer(file: File) {
-        if (file.extension == "mp4") {
-            val intent = Intent(this, VideoPlayerActivity::class.java)
-            intent.putExtra("video_path", file.absolutePath)
-            startActivity(intent)
-        } else {
-            val intent = Intent(this, PhotoViewerActivity::class.java)
-            intent.putExtra("photo_path", file.absolutePath)
-            startActivity(intent)
-        }
+        val intent = Intent(this, PhotoViewerActivity::class.java)
+        intent.putExtra("photo_path", file.absolutePath)
+        startActivity(intent)
     }
 
     private fun getQueueDir(): File {
