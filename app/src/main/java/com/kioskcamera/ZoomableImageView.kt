@@ -26,10 +26,7 @@ class ZoomableImageView @JvmOverloads constructor(
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val factor = detector.scaleFactor
-                // Filter tiny jitter
-                if (factor in 0.98f..1.02f) return true
-                scaleFactor *= factor
+                scaleFactor *= detector.scaleFactor
                 scaleFactor = scaleFactor.coerceIn(1f, 8f)
                 clampPan()
                 applyTransform()
