@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.view.OrientationEventListener
+import android.view.Surface
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -59,6 +61,8 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val httpClient = OkHttpClient()
     private var isDestroyed = false
+    private lateinit var orientationListener: OrientationEventListener
+    private var deviceRotation = Surface.ROTATION_0
 
     // Camera state
     private var useFrontCamera = false
@@ -108,6 +112,7 @@ class MainActivity : AppCompatActivity() {
 
         setupZoomGesture()
         setupControls()
+        setupOrientationListener()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED) {
@@ -144,6 +149,26 @@ class MainActivity : AppCompatActivity() {
         hdrButton.setOnClickListener { toggleHdr() }
         timerButton.setOnClickListener { cycleTimer() }
         switchCameraButton.setOnClickListener { switchCamera() }
+    }
+
+    // --- Orientation ---
+
+    private fun setupOrientationListener() {
+        orientationListener = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+                deviceRotation = when {
+                    orientation >= 315 || orientation < 45 -> Surface.ROTATION_0
+                    orientation in 45..134 -> Surface.ROTATION_270
+                    orientation in 135..224 -> Surface.ROTATION_180
+                    else -> Surface.ROTATION_90
+                }
+                imageCapture?.targetRotation = deviceRotation
+            }
+        }
+        if (orientationListener.canDetectOrientation()) {
+            orientationListener.enable()
+        }
     }
 
     // --- Flash ---
@@ -535,6 +560,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isDestroyed = true
+        orientationListener.disable()
         countdownTimer?.cancel()
         handler.removeCallbacks(uploadRunnable)
         handler.removeCallbacksAndMessages(null)
