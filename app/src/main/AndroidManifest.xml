@@ -25,5 +25,10 @@
             android:name=".GalleryActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".PhotoViewerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
     </application>
 </manifest>

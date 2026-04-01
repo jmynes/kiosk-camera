@@ -216,7 +216,13 @@ class MainActivity : AppCompatActivity() {
 
     // --- Shutter / Countdown ---
 
+    private var countdownActive = false
+
     private fun onShutterPressed() {
+        if (countdownActive) {
+            cancelCountdown()
+            return
+        }
         if (timerSeconds == 0) {
             takePhoto()
         } else {
@@ -225,8 +231,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCountdown() {
-        captureButton.isEnabled = false
+        countdownActive = true
         countdownText.visibility = View.VISIBLE
+        showStatus("Tap shutter to cancel")
 
         countdownTimer?.cancel()
         countdownTimer = object : CountDownTimer(timerSeconds * 1000L, 1000) {
@@ -237,9 +244,18 @@ class MainActivity : AppCompatActivity() {
 
             override fun onFinish() {
                 countdownText.visibility = View.GONE
+                countdownActive = false
                 takePhoto()
             }
         }.start()
+    }
+
+    private fun cancelCountdown() {
+        countdownTimer?.cancel()
+        countdownText.visibility = View.GONE
+        countdownActive = false
+        captureButton.isEnabled = true
+        showStatus("Timer cancelled")
     }
 
     // --- Zoom + Focus Gestures ---

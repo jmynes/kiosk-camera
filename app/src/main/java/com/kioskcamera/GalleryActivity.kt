@@ -1,5 +1,6 @@
 package com.kioskcamera
 
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -37,7 +38,11 @@ class GalleryActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
 
         recyclerView.layoutManager = GridLayoutManager(this, 3)
-        adapter = PhotoAdapter(getPhotos()) { file -> confirmDelete(file) }
+        adapter = PhotoAdapter(
+            getPhotos(),
+            onTap = { file -> openViewer(file) },
+            onLongPress = { file -> confirmDelete(file) }
+        )
         recyclerView.adapter = adapter
 
         updateEmptyState()
@@ -46,6 +51,12 @@ class GalleryActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshPhotos()
+    }
+
+    private fun openViewer(file: File) {
+        val intent = Intent(this, PhotoViewerActivity::class.java)
+        intent.putExtra("photo_path", file.absolutePath)
+        startActivity(intent)
     }
 
     private fun getQueueDir(): File {
@@ -89,7 +100,8 @@ class GalleryActivity : AppCompatActivity() {
 
     class PhotoAdapter(
         private var photos: MutableList<File>,
-        private val onDelete: (File) -> Unit
+        private val onTap: (File) -> Unit,
+        private val onLongPress: (File) -> Unit
     ) : RecyclerView.Adapter<PhotoAdapter.ViewHolder>() {
 
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -106,7 +118,6 @@ class GalleryActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val file = photos[position]
 
-            // Load thumbnail efficiently
             val options = BitmapFactory.Options().apply { inSampleSize = 4 }
             val bitmap = BitmapFactory.decodeFile(file.absolutePath, options)
             holder.imageView.setImageBitmap(bitmap)
@@ -114,8 +125,9 @@ class GalleryActivity : AppCompatActivity() {
             val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
             holder.timeText.text = sdf.format(Date(file.lastModified()))
 
+            holder.itemView.setOnClickListener { onTap(file) }
             holder.itemView.setOnLongClickListener {
-                onDelete(file)
+                onLongPress(file)
                 true
             }
         }
