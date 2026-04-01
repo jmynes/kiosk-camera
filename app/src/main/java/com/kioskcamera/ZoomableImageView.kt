@@ -41,12 +41,15 @@ class ZoomableImageView @JvmOverloads constructor(
     // Manual double-tap detection
     private var lastClickTime = 0L
     private val lastClickPoint = PointF()
+    private var downTime = 0L
+    private var moved = false
 
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
                 mode = ZOOM
                 scaleAnimator?.cancel()
+                parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
 
@@ -235,11 +238,18 @@ class ZoomableImageView @JvmOverloads constructor(
                 last.set(curr)
                 start.set(last)
                 mode = DRAG
+                downTime = System.currentTimeMillis()
+                moved = false
+                if (saveScale > 1.05f) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (mode == DRAG && saveScale > 1.05f && !scaleDetector.isInProgress) {
                     val dx = curr.x - last.x
                     val dy = curr.y - last.y
+
+                    if (abs(dx) > 2 || abs(dy) > 2) moved = true
 
                     val fixTransX = getFixDragTrans(dx, viewWidth.toFloat(), origWidth * saveScale)
                     val fixTransY = getFixDragTrans(dy, viewHeight.toFloat(), origHeight * saveScale)
@@ -248,6 +258,7 @@ class ZoomableImageView @JvmOverloads constructor(
                     fixTrans()
                     imageMatrix = mMatrix
                 }
+                if (mode == ZOOM) moved = true
                 last.set(curr)
             }
             MotionEvent.ACTION_POINTER_UP -> {
@@ -262,16 +273,12 @@ class ZoomableImageView @JvmOverloads constructor(
             MotionEvent.ACTION_UP -> {
                 mode = NONE
 
-                val xDiff = abs(curr.x - start.x)
-                val yDiff = abs(curr.y - start.y)
+                val tapDuration = System.currentTimeMillis() - downTime
+                val isTap = !moved && tapDuration < 300
 
-                // Detect tap (small movement)
-                if (xDiff < CLICK_THRESHOLD && yDiff < CLICK_THRESHOLD) {
+                if (isTap) {
                     val now = System.currentTimeMillis()
-                    val dx = abs(curr.x - lastClickPoint.x)
-                    val dy = abs(curr.y - lastClickPoint.y)
-
-                    if (now - lastClickTime < DOUBLE_TAP_DELAY && dx < CLICK_THRESHOLD * 3 && dy < CLICK_THRESHOLD * 3) {
+                    if (now - lastClickTime < DOUBLE_TAP_DELAY) {
                         onDoubleTap(curr.x, curr.y)
                         lastClickTime = 0
                     } else {
