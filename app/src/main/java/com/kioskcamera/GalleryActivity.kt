@@ -48,6 +48,7 @@ class GalleryActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.clearAllButton).setOnClickListener { confirmClearAll() }
 
         recyclerView.layoutManager = GridLayoutManager(this, 3)
         adapter = PhotoAdapter(
@@ -96,6 +97,22 @@ class GalleryActivity : AppCompatActivity() {
             emptyText.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
         }
+    }
+
+    private fun confirmClearAll() {
+        val count = adapter.itemCount
+        if (count == 0) return
+
+        AlertDialog.Builder(this)
+            .setTitle("Delete all $count items?")
+            .setMessage("This will remove all queued photos and videos.")
+            .setPositiveButton("Delete All") { _, _ ->
+                getQueueDir().listFiles()?.forEach { it.delete() }
+                thumbCache.evictAll()
+                refreshPhotos()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun confirmDelete(file: File) {
