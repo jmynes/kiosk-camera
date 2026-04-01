@@ -76,6 +76,10 @@ class MainActivity : AppCompatActivity() {
 
     // Camera state
     private var pendingRecordOnBind = false
+    private var longPressStartedFromPhoto = false
+    private var longPressRecordingStartTime = 0L
+    private var pendingPhotoOnBind = false
+    private var revertToPhotoAfterRecording = false
     private var useFrontCamera = false
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var hdrEnabled = false
@@ -158,14 +162,61 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        captureButton.setOnClickListener {
-            pulseButton(captureButton)
-            onShutterPressed()
-        }
-        captureButton.setOnLongClickListener {
-            if (!isVideoMode && !isRecording) {
+        var shutterDownTime = 0L
+        var shutterHeld = false
+        val longPressRunnable = Runnable {
+            if (shutterHeld && !isVideoMode && !isRecording) {
+                longPressStartedFromPhoto = true
                 pendingRecordOnBind = true
                 setMode(true)
+            }
+        }
+        captureButton.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    shutterDownTime = System.currentTimeMillis()
+                    shutterHeld = true
+                    longPressStartedFromPhoto = false
+                    if (!isVideoMode && !isRecording) {
+                        handler.postDelayed(longPressRunnable, 500)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val held = System.currentTimeMillis() - shutterDownTime
+                    shutterHeld = false
+                    handler.removeCallbacks(longPressRunnable)
+
+                    if (longPressStartedFromPhoto) {
+                        if (isRecording) {
+                            val recordElapsed = System.currentTimeMillis() - longPressRecordingStartTime
+                            if (recordElapsed < 1000) {
+                                revertToPhotoAfterRecording = true
+                                activeRecording?.stop()
+                                activeRecording = null
+                            } else {
+                                stopRecording()
+                            }
+                        } else {
+                            // Not recording yet (still binding or pending)
+                            // Set flag so it reverts once recording starts and immediately stops
+                            pendingRecordOnBind = false
+                            revertToPhotoAfterRecording = true
+                            // If recording starts after this, it'll immediately stop via the flag
+                            // If it hasn't started, just revert now
+                            handler.postDelayed({
+                                if (revertToPhotoAfterRecording && !isRecording) {
+                                    revertToPhotoAfterRecording = false
+                                    setMode(false)
+                                    pendingPhotoOnBind = true
+                                }
+                            }, 500)
+                        }
+                        longPressStartedFromPhoto = false
+                    } else if (held < 500) {
+                        pulseButton(captureButton)
+                        onShutterPressed()
+                    }
+                }
             }
             true
         }
@@ -376,6 +427,12 @@ class MainActivity : AppCompatActivity() {
                     is VideoRecordEvent.Start -> {
                         isRecording = true
                         recordingStartTime = System.currentTimeMillis()
+                        longPressRecordingStartTime = recordingStartTime
+                        if (revertToPhotoAfterRecording) {
+                            // User already released — stop immediately
+                            activeRecording?.stop()
+                            return@start
+                        }
                         handler.post {
                             captureButton.setBackgroundResource(R.drawable.stop_button)
                             recordingTimer.visibility = View.VISIBLE
@@ -389,10 +446,19 @@ class MainActivity : AppCompatActivity() {
                             recordingTimer.visibility = View.GONE
                             handler.removeCallbacks(timerUpdateRunnable)
                         }
-                        if (event.hasError()) {
-                            Log.e(TAG, "Video recording error: ${event.error}")
-                            handler.post { showStatus("Recording failed") }
+                        val duration = System.currentTimeMillis() - recordingStartTime
+                        if (event.hasError() || revertToPhotoAfterRecording) {
+                            if (event.hasError()) Log.e(TAG, "Video recording error: ${event.error}")
                             videoFile.delete()
+                            if (revertToPhotoAfterRecording) {
+                                revertToPhotoAfterRecording = false
+                                handler.post {
+                                    setMode(false)
+                                    pendingPhotoOnBind = true
+                                }
+                            } else {
+                                handler.post { showStatus("Recording failed") }
+                            }
                         } else {
                             Log.i(TAG, "Video saved: ${videoFile.absolutePath}")
                             handler.post {
@@ -587,6 +653,11 @@ class MainActivity : AppCompatActivity() {
 
         if (exposureSlider.visibility == View.VISIBLE) {
             setupExposureSlider()
+        }
+
+        if (pendingPhotoOnBind) {
+            pendingPhotoOnBind = false
+            takePhoto()
         }
     }
 
