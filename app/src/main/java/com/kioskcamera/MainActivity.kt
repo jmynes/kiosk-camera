@@ -1,6 +1,7 @@
 package com.kioskcamera
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -24,6 +25,7 @@ import androidx.camera.core.*
 import androidx.camera.extensions.ExtensionMode
 import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -52,8 +54,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var exposureSlider: SeekBar
     private lateinit var exposureText: TextView
     private lateinit var countdownText: TextView
+    private lateinit var photoModeButton: TextView
+    private lateinit var videoModeButton: TextView
+    private lateinit var recordingTimer: TextView
 
     private var imageCapture: ImageCapture? = null
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var activeRecording: Recording? = null
     private var camera: Camera? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private lateinit var cameraExecutor: ExecutorService
@@ -69,8 +76,11 @@ class MainActivity : AppCompatActivity() {
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var hdrEnabled = false
     private var hdrAvailable = false
-    private var timerSeconds = 0 // 0 = off, 3, 10
+    private var timerSeconds = 0
     private var countdownTimer: CountDownTimer? = null
+    private var isVideoMode = false
+    private var isRecording = false
+    private var recordingStartTime = 0L
 
     private lateinit var scaleGestureDetector: ScaleGestureDetector
     private lateinit var tapGestureDetector: GestureDetector
@@ -87,7 +97,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Don't go immersive — this is the whole point of this app
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
 
@@ -106,6 +115,9 @@ class MainActivity : AppCompatActivity() {
         exposureSlider = findViewById(R.id.exposureSlider)
         exposureText = findViewById(R.id.exposureText)
         countdownText = findViewById(R.id.countdownText)
+        photoModeButton = findViewById(R.id.photoModeButton)
+        videoModeButton = findViewById(R.id.videoModeButton)
+        recordingTimer = findViewById(R.id.recordingTimer)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         uploadExecutor = Executors.newSingleThreadExecutor()
@@ -118,7 +130,9 @@ class MainActivity : AppCompatActivity() {
             == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
+            ActivityCompat.requestPermissions(this,
+                arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+                CAMERA_PERMISSION_CODE)
         }
 
         startUploadLoop()
@@ -149,6 +163,29 @@ class MainActivity : AppCompatActivity() {
         hdrButton.setOnClickListener { toggleHdr() }
         timerButton.setOnClickListener { cycleTimer() }
         switchCameraButton.setOnClickListener { switchCamera() }
+
+        photoModeButton.setOnClickListener { setMode(false) }
+        videoModeButton.setOnClickListener { setMode(true) }
+    }
+
+    // --- Mode Toggle ---
+
+    private fun setMode(video: Boolean) {
+        if (isRecording) return // Don't switch while recording
+        isVideoMode = video
+
+        photoModeButton.setTextColor(if (!video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+        photoModeButton.setTypeface(null, if (!video) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        videoModeButton.setTextColor(if (video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+        videoModeButton.setTypeface(null, if (video) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+
+        captureButton.setBackgroundResource(if (video) R.drawable.record_button else R.drawable.shutter_button)
+
+        // Hide timer/HDR in video mode
+        timerButton.visibility = if (video) View.GONE else View.VISIBLE
+        hdrButton.visibility = if (video) View.GONE else View.VISIBLE
+
+        startCamera()
     }
 
     // --- Orientation ---
@@ -180,14 +217,18 @@ class MainActivity : AppCompatActivity() {
             else -> ImageCapture.FLASH_MODE_OFF
         }
         imageCapture?.flashMode = flashMode
+        // Toggle torch for video mode
+        if (isVideoMode) {
+            camera?.cameraControl?.enableTorch(flashMode == ImageCapture.FLASH_MODE_ON)
+        }
         updateFlashButton()
     }
 
     private fun updateFlashButton() {
         flashButton.text = when (flashMode) {
-            ImageCapture.FLASH_MODE_AUTO -> "FLASH AUTO"
-            ImageCapture.FLASH_MODE_ON -> "FLASH ON"
-            else -> "FLASH OFF"
+            ImageCapture.FLASH_MODE_AUTO -> if (isVideoMode) "LIGHT ON" else "FLASH AUTO"
+            ImageCapture.FLASH_MODE_ON -> if (isVideoMode) "LIGHT ON" else "FLASH ON"
+            else -> if (isVideoMode) "LIGHT OFF" else "FLASH OFF"
         }
         flashButton.setTextColor(
             if (flashMode == ImageCapture.FLASH_MODE_OFF) 0xFFFFFFFF.toInt() else 0xFFFFD700.toInt()
@@ -203,7 +244,7 @@ class MainActivity : AppCompatActivity() {
         }
         hdrEnabled = !hdrEnabled
         updateHdrButton()
-        startCamera() // Must rebind with extension
+        startCamera()
     }
 
     private fun updateHdrButton() {
@@ -234,6 +275,7 @@ class MainActivity : AppCompatActivity() {
     // --- Camera Switch ---
 
     private fun switchCamera() {
+        if (isRecording) return
         useFrontCamera = !useFrontCamera
         startCamera()
     }
@@ -243,6 +285,10 @@ class MainActivity : AppCompatActivity() {
     private var countdownActive = false
 
     private fun onShutterPressed() {
+        if (isVideoMode) {
+            toggleRecording()
+            return
+        }
         if (countdownActive) {
             cancelCountdown()
             return
@@ -282,6 +328,92 @@ class MainActivity : AppCompatActivity() {
         showStatus("Timer cancelled")
     }
 
+    // --- Video Recording ---
+
+    @SuppressLint("MissingPermission")
+    private fun toggleRecording() {
+        if (isRecording) {
+            stopRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startRecording() {
+        val vc = videoCapture ?: return
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), CAMERA_PERMISSION_CODE)
+            return
+        }
+
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val videoFile = File(getQueueDir(), "VID_${timestamp}.mp4")
+
+        val outputOptions = FileOutputOptions.Builder(videoFile).build()
+
+        activeRecording = vc.output
+            .prepareRecording(this, outputOptions)
+            .withAudioEnabled()
+            .start(ContextCompat.getMainExecutor(this)) { event ->
+                when (event) {
+                    is VideoRecordEvent.Start -> {
+                        isRecording = true
+                        recordingStartTime = System.currentTimeMillis()
+                        handler.post {
+                            captureButton.setBackgroundResource(R.drawable.stop_button)
+                            recordingTimer.visibility = View.VISIBLE
+                            updateRecordingTimer()
+                        }
+                    }
+                    is VideoRecordEvent.Finalize -> {
+                        isRecording = false
+                        handler.post {
+                            captureButton.setBackgroundResource(R.drawable.record_button)
+                            recordingTimer.visibility = View.GONE
+                            handler.removeCallbacks(timerUpdateRunnable)
+                        }
+                        if (event.hasError()) {
+                            Log.e(TAG, "Video recording error: ${event.error}")
+                            handler.post { showStatus("Recording failed") }
+                            videoFile.delete()
+                        } else {
+                            Log.i(TAG, "Video saved: ${videoFile.absolutePath}")
+                            handler.post {
+                                showStatus("Video saved")
+                                updateGalleryThumbnail()
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun stopRecording() {
+        activeRecording?.stop()
+        activeRecording = null
+    }
+
+    private val timerUpdateRunnable = object : Runnable {
+        override fun run() {
+            if (isRecording) {
+                updateRecordingTimer()
+                handler.postDelayed(this, 1000)
+            }
+        }
+    }
+
+    private fun updateRecordingTimer() {
+        val elapsed = (System.currentTimeMillis() - recordingStartTime) / 1000
+        val minutes = elapsed / 60
+        val seconds = elapsed % 60
+        recordingTimer.text = String.format("● %02d:%02d", minutes, seconds)
+        handler.removeCallbacks(timerUpdateRunnable)
+        handler.postDelayed(timerUpdateRunnable, 1000)
+    }
+
     // --- Zoom + Focus Gestures ---
 
     private fun setupZoomGesture() {
@@ -309,7 +441,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    // Double tap toggles exposure slider visibility
                     toggleExposureSlider()
                     return true
                 }
@@ -398,30 +529,34 @@ class MainActivity : AppCompatActivity() {
             else
                 CameraSelector.DEFAULT_BACK_CAMERA
 
-            // Check HDR extension availability
-            val extensionsFuture = ExtensionsManager.getInstanceAsync(this, provider)
-            extensionsFuture.addListener({
-                val extensionsManager = extensionsFuture.get()
+            if (isVideoMode) {
+                bindVideoCamera(provider, baseCameraSelector)
+            } else {
+                // Check HDR extension availability
+                val extensionsFuture = ExtensionsManager.getInstanceAsync(this, provider)
+                extensionsFuture.addListener({
+                    val extensionsManager = extensionsFuture.get()
 
-                hdrAvailable = extensionsManager.isExtensionAvailable(
-                    baseCameraSelector, ExtensionMode.HDR
-                )
-                updateHdrButton()
-
-                val cameraSelector = if (hdrEnabled && hdrAvailable) {
-                    extensionsManager.getExtensionEnabledCameraSelector(
+                    hdrAvailable = extensionsManager.isExtensionAvailable(
                         baseCameraSelector, ExtensionMode.HDR
                     )
-                } else {
-                    baseCameraSelector
-                }
+                    updateHdrButton()
 
-                bindCamera(provider, cameraSelector)
-            }, ContextCompat.getMainExecutor(this))
+                    val cameraSelector = if (hdrEnabled && hdrAvailable) {
+                        extensionsManager.getExtensionEnabledCameraSelector(
+                            baseCameraSelector, ExtensionMode.HDR
+                        )
+                    } else {
+                        baseCameraSelector
+                    }
+
+                    bindPhotoCamera(provider, cameraSelector)
+                }, ContextCompat.getMainExecutor(this))
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun bindCamera(provider: ProcessCameraProvider, cameraSelector: CameraSelector) {
+    private fun bindPhotoCamera(provider: ProcessCameraProvider, cameraSelector: CameraSelector) {
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
@@ -431,10 +566,31 @@ class MainActivity : AppCompatActivity() {
             .setFlashMode(flashMode)
             .build()
 
+        videoCapture = null
+
         provider.unbindAll()
         camera = provider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
 
-        // Reset exposure slider if visible
+        if (exposureSlider.visibility == View.VISIBLE) {
+            setupExposureSlider()
+        }
+    }
+
+    private fun bindVideoCamera(provider: ProcessCameraProvider, cameraSelector: CameraSelector) {
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        val recorder = Recorder.Builder()
+            .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+            .build()
+
+        videoCapture = VideoCapture.withOutput(recorder)
+        imageCapture = null
+
+        provider.unbindAll()
+        camera = provider.bindToLifecycle(this, cameraSelector, preview, videoCapture!!)
+
         if (exposureSlider.visibility == View.VISIBLE) {
             setupExposureSlider()
         }
@@ -480,11 +636,18 @@ class MainActivity : AppCompatActivity() {
     // --- Gallery Thumbnail ---
 
     private fun updateGalleryThumbnail() {
-        val files = getQueueDir().listFiles { f -> f.extension == "jpg" }
+        val files = getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
             ?.sortedByDescending { it.lastModified() }
         if (files != null && files.isNotEmpty()) {
-            val bitmap = decodeBitmapWithRotation(files[0].absolutePath, sampleSize = 8)
-            galleryButton.setImageBitmap(bitmap)
+            val first = files[0]
+            if (first.extension == "jpg") {
+                val bitmap = decodeBitmapWithRotation(first.absolutePath, sampleSize = 8)
+                galleryButton.setImageBitmap(bitmap)
+            } else {
+                // For video, just show a placeholder color
+                galleryButton.setImageDrawable(null)
+                galleryButton.setBackgroundResource(R.drawable.gallery_button_bg)
+            }
         } else {
             galleryButton.setImageDrawable(null)
         }
@@ -500,7 +663,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun uploadPendingPhotos() {
         val queueDir = getQueueDir()
-        val files = queueDir.listFiles { f -> f.extension == "jpg" } ?: return
+        val files = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" } ?: return
 
         for (file in files.sortedBy { it.lastModified() }) {
             if (isDestroyed) return
@@ -511,8 +674,8 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Log.w(TAG, "Upload failed for ${file.name}, will retry later")
                 handler.post {
-                    val pending = queueDir.listFiles { f -> f.extension == "jpg" }?.size ?: 0
-                    showStatus("$pending photo(s) queued for upload")
+                    val pending = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }?.size ?: 0
+                    showStatus("$pending file(s) queued for upload")
                 }
                 break
             }
@@ -520,9 +683,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun uploadFile(file: File): Boolean {
+        val mediaType = if (file.extension == "mp4") "video/mp4" else "image/jpeg"
+        val fieldName = if (file.extension == "mp4") "video" else "photo"
+
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("photo", file.name, file.asRequestBody("image/jpeg".toMediaType()))
+            .addFormDataPart(fieldName, file.name, file.asRequestBody(mediaType.toMediaType()))
             .build()
 
         val request = Request.Builder()
@@ -560,9 +726,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         isDestroyed = true
+        if (isRecording) {
+            activeRecording?.stop()
+        }
         orientationListener.disable()
         countdownTimer?.cancel()
         handler.removeCallbacks(uploadRunnable)
+        handler.removeCallbacks(timerUpdateRunnable)
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
         uploadExecutor.shutdown()

@@ -152,6 +152,48 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- Recording timer -->
+    <TextView
+        android:id="@+id/recordingTimer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="160dp"
+        android:padding="6dp"
+        android:background="#80000000"
+        android:textColor="#FF4444"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- Mode toggle (PHOTO / VIDEO) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="130dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/photoModeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PHOTO"
+            android:textColor="#FFD700"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:padding="8dp" />
+
+        <TextView
+            android:id="@+id/videoModeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="VIDEO"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:padding="8dp" />
+    </LinearLayout>
+
     <!-- Bottom controls -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -177,7 +219,7 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <!-- Shutter button -->
+        <!-- Shutter / Record button -->
         <ImageButton
             android:id="@+id/captureButton"
             android:layout_width="80dp"

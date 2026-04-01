@@ -1,7 +1,10 @@
 package com.kioskcamera
 
 import android.content.Intent
+import android.media.ThumbnailUtils
 import android.os.Bundle
+import android.provider.MediaStore
+import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -53,9 +56,19 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun openViewer(file: File) {
-        val intent = Intent(this, PhotoViewerActivity::class.java)
-        intent.putExtra("photo_path", file.absolutePath)
-        startActivity(intent)
+        if (file.extension == "mp4") {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this, "$packageName.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/mp4")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } else {
+            val intent = Intent(this, PhotoViewerActivity::class.java)
+            intent.putExtra("photo_path", file.absolutePath)
+            startActivity(intent)
+        }
     }
 
     private fun getQueueDir(): File {
@@ -65,7 +78,7 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun getPhotos(): MutableList<File> {
-        return getQueueDir().listFiles { f -> f.extension == "jpg" }
+        return getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
             ?.sortedByDescending { it.lastModified() }
             ?.toMutableList() ?: mutableListOf()
     }
@@ -117,11 +130,17 @@ class GalleryActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val file = photos[position]
 
-            val bitmap = decodeBitmapWithRotation(file.absolutePath, sampleSize = 4)
-            holder.imageView.setImageBitmap(bitmap)
+            if (file.extension == "mp4") {
+                val thumb = ThumbnailUtils.createVideoThumbnail(file, Size(270, 270), null)
+                holder.imageView.setImageBitmap(thumb)
+            } else {
+                val bitmap = decodeBitmapWithRotation(file.absolutePath, sampleSize = 4)
+                holder.imageView.setImageBitmap(bitmap)
+            }
 
             val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
-            holder.timeText.text = sdf.format(Date(file.lastModified()))
+            val label = if (file.extension == "mp4") "▶ " else ""
+            holder.timeText.text = label + sdf.format(Date(file.lastModified()))
 
             holder.itemView.setOnClickListener { onTap(file) }
             holder.itemView.setOnLongClickListener {
