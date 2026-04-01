@@ -9,16 +9,25 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <ImageButton
-        android:id="@+id/captureButton"
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="48dp"
-        android:background="@drawable/shutter_button"
-        android:contentDescription="Take photo"
-        android:src="@android:color/transparent" />
+    <com.kioskcamera.GridOverlayView
+        android:id="@+id/gridOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
+    <!-- Zoom level indicator -->
+    <TextView
+        android:id="@+id/zoomText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="60dp"
+        android:padding="6dp"
+        android:background="#80000000"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- Status text -->
     <TextView
         android:id="@+id/statusText"
         android:layout_width="wrap_content"
@@ -30,5 +39,53 @@
         android:textColor="@android:color/white"
         android:textSize="14sp"
         android:visibility="gone" />
+
+    <!-- Bottom controls -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingBottom="48dp"
+        android:paddingHorizontal="32dp">
+
+        <!-- Gallery button -->
+        <ImageButton
+            android:id="@+id/galleryButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_weight="0"
+            android:background="@drawable/gallery_button_bg"
+            android:scaleType="centerCrop"
+            android:contentDescription="View photos" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Shutter button -->
+        <ImageButton
+            android:id="@+id/captureButton"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_weight="0"
+            android:background="@drawable/shutter_button"
+            android:contentDescription="Take photo"
+            android:src="@android:color/transparent" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Placeholder for symmetry -->
+        <View
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_weight="0" />
+
+    </LinearLayout>
 
 </FrameLayout>
