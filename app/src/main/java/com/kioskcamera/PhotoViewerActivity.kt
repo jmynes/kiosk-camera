@@ -82,7 +82,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     private fun setupControls() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-        findViewById<ImageButton>(R.id.deleteButton).setOnClickListener { confirmDelete() }
+        findViewById<ImageButton>(R.id.deleteButtonBottom).setOnClickListener { confirmDelete() }
     }
 
     private fun confirmDelete() {
