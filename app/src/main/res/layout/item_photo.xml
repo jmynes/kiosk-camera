@@ -20,11 +20,12 @@
 
     <ImageView
         android:id="@+id/checkMark"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_gravity="top|end"
-        android:layout_margin="4dp"
-        android:src="@android:drawable/checkbox_on_background"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:padding="2dp"
+        android:src="@drawable/ic_select_unchecked"
         android:visibility="gone" />
 
     <TextView

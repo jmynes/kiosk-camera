@@ -147,6 +147,7 @@ class GalleryActivity : AppCompatActivity() {
         normalBar.visibility = View.GONE
         selectionBar.visibility = View.VISIBLE
         updateSelectionCount()
+        adapter.notifyDataSetChanged()
     }
 
     fun exitSelectionMode() {
@@ -267,7 +268,10 @@ class GalleryActivity : AppCompatActivity() {
 
             val selected = position in selectedPositions
             holder.selectionOverlay.visibility = if (selected) View.VISIBLE else View.GONE
-            holder.checkMark.visibility = if (selected) View.VISIBLE else View.GONE
+            holder.checkMark.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+            holder.checkMark.setImageResource(
+                if (selected) R.drawable.ic_select_checked else R.drawable.ic_select_unchecked
+            )
 
             holder.itemView.setOnClickListener {
                 onItemTap(holder.bindingAdapterPosition)
