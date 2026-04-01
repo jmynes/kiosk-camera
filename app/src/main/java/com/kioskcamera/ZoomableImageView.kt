@@ -26,29 +26,18 @@ class ZoomableImageView @JvmOverloads constructor(
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val prevScale = scaleFactor
-                scaleFactor *= detector.scaleFactor
-                scaleFactor = scaleFactor.coerceIn(0.9f, 8f)
-
-                // Zoom toward the focal point (between fingers)
-                val focusX = detector.focusX
-                val focusY = detector.focusY
-                val centerX = width / 2f
-                val centerY = height / 2f
-                val scaleChange = scaleFactor / prevScale
-                panX = focusX - scaleChange * (focusX - panX - centerX) - centerX
-                panY = focusY - scaleChange * (focusY - panY - centerY) - centerY
+                val factor = detector.scaleFactor
+                // Filter tiny jitter
+                if (factor in 0.98f..1.02f) return true
+                scaleFactor *= factor
+                scaleFactor = scaleFactor.coerceIn(1f, 8f)
                 clampPan()
                 applyTransform()
                 return true
             }
-
-            override fun onScaleEnd(detector: ScaleGestureDetector) {
-                if (scaleFactor < 1f) {
-                    animateToTransform(1f, 0f, 0f)
-                }
-            }
-        })
+        }).also {
+        it.isQuickScaleEnabled = false
+    }
 
     private val gestureDetector = GestureDetector(context,
         object : GestureDetector.SimpleOnGestureListener() {
@@ -57,10 +46,9 @@ class ZoomableImageView @JvmOverloads constructor(
                     animateToTransform(1f, 0f, 0f)
                 } else {
                     val targetScale = 3f
-                    val centerX = width / 2f
-                    val centerY = height / 2f
-                    val targetPanX = (centerX - e.x) * (targetScale - 1)
-                    val targetPanY = (centerY - e.y) * (targetScale - 1)
+                    // Pan so the tapped point stays roughly in place
+                    val targetPanX = (width / 2f - e.x) * (targetScale - 1) / targetScale
+                    val targetPanY = (height / 2f - e.y) * (targetScale - 1) / targetScale
                     animateToTransform(targetScale, targetPanX, targetPanY)
                 }
                 return true
@@ -109,7 +97,6 @@ class ZoomableImageView @JvmOverloads constructor(
                 scaleFactor = startScale + (targetScale - startScale) * t
                 panX = startPanX + (targetPanX - startPanX) * t
                 panY = startPanY + (targetPanY - startPanY) * t
-                clampPan()
                 applyTransform()
             }
             start()
@@ -167,18 +154,18 @@ class ZoomableImageView @JvmOverloads constructor(
                 lastTouchY = event.y
             }
             MotionEvent.ACTION_MOVE -> {
-                if (scaleFactor > 1.05f && !scaleDetector.isInProgress) {
-                    val idx = event.findPointerIndex(activePointerId)
-                    if (idx >= 0) {
-                        val x = event.getX(idx)
-                        val y = event.getY(idx)
+                val idx = event.findPointerIndex(activePointerId)
+                if (idx >= 0) {
+                    val x = event.getX(idx)
+                    val y = event.getY(idx)
+                    if (scaleFactor > 1.05f && !scaleDetector.isInProgress) {
                         panX += x - lastTouchX
                         panY += y - lastTouchY
                         clampPan()
                         applyTransform()
-                        lastTouchX = x
-                        lastTouchY = y
                     }
+                    lastTouchX = x
+                    lastTouchY = y
                 }
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
