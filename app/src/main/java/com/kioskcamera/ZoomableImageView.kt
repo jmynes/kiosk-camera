@@ -17,6 +17,8 @@ class ZoomableImageView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : AppCompatImageView(context, attrs) {
 
+    var onSingleTapCallback: (() -> Unit)? = null
+
     private val mMatrix = Matrix()
     private val m = FloatArray(9)
 
@@ -43,6 +45,7 @@ class ZoomableImageView @JvmOverloads constructor(
     private val lastClickPoint = PointF()
     private var downTime = 0L
     private var moved = false
+    private val singleTapRunnable = Runnable { onSingleTapCallback?.invoke() }
 
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -279,11 +282,14 @@ class ZoomableImageView @JvmOverloads constructor(
                 if (isTap) {
                     val now = System.currentTimeMillis()
                     if (now - lastClickTime < DOUBLE_TAP_DELAY) {
+                        removeCallbacks(singleTapRunnable)
                         onDoubleTap(curr.x, curr.y)
                         lastClickTime = 0
                     } else {
                         lastClickTime = now
                         lastClickPoint.set(curr)
+                        removeCallbacks(singleTapRunnable)
+                        postDelayed(singleTapRunnable, DOUBLE_TAP_DELAY)
                     }
                 } else if (saveScale > 1.05f) {
                     // Fling

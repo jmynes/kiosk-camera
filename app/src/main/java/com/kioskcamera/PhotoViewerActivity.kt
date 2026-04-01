@@ -33,6 +33,9 @@ class PhotoViewerActivity : AppCompatActivity() {
     private var mediaFiles: MutableList<File> = mutableListOf()
     private var isMuted = false
     private var activeMediaPlayer: android.media.MediaPlayer? = null
+    private var controlsVisible = true
+    private lateinit var topBar: View
+    private lateinit var bottomContainer: View
 
     private val currentIndex: Int get() = pager.currentItem
 
@@ -53,6 +56,8 @@ class PhotoViewerActivity : AppCompatActivity() {
         floatingPlayPause.setOnClickListener { toggleCurrentVideo() }
         floatingMute = findViewById(R.id.floatingMute)
         floatingMute.setOnClickListener { toggleMute() }
+        topBar = findViewById(R.id.topBar)
+        bottomContainer = findViewById(R.id.bottomContainer)
 
         val startPath = intent.getStringExtra("photo_path")
             ?: intent.getStringExtra("video_path")
@@ -167,6 +172,19 @@ class PhotoViewerActivity : AppCompatActivity() {
         }
     }
 
+    fun toggleControls() {
+        controlsVisible = !controlsVisible
+        val vis = if (controlsVisible) View.VISIBLE else View.GONE
+        topBar.visibility = vis
+        bottomContainer.visibility = vis
+
+        val isVideo = currentIndex < mediaFiles.size && mediaFiles[currentIndex].extension == "mp4"
+        if (isVideo) {
+            floatingPlayPause.visibility = vis
+            floatingMute.visibility = vis
+        }
+    }
+
     fun updatePlayPauseState(playing: Boolean) {
         floatingPlayPause.setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
     }
@@ -276,6 +294,7 @@ class PhotoViewerActivity : AppCompatActivity() {
                     val bitmap = decodeBitmapWithRotation(file.absolutePath)
                     holder.imageView.resetTransform()
                     holder.imageView.setImageBitmap(bitmap)
+                    holder.imageView.onSingleTapCallback = { activity.toggleControls() }
                 }
                 is VideoVH -> {
                     // Load first frame as thumbnail
@@ -313,7 +332,7 @@ class PhotoViewerActivity : AppCompatActivity() {
                         }
                     }
 
-                    holder.videoView.setOnClickListener { togglePlay() }
+                    holder.videoView.setOnClickListener { activity.toggleControls() }
 
                     holder.videoView.setOnCompletionListener {
                         activity.updatePlayPauseState(false)
