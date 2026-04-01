@@ -3,7 +3,6 @@ package com.kioskcamera
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
@@ -459,8 +458,7 @@ class MainActivity : AppCompatActivity() {
         val files = getQueueDir().listFiles { f -> f.extension == "jpg" }
             ?.sortedByDescending { it.lastModified() }
         if (files != null && files.isNotEmpty()) {
-            val options = BitmapFactory.Options().apply { inSampleSize = 8 }
-            val bitmap = BitmapFactory.decodeFile(files[0].absolutePath, options)
+            val bitmap = decodeBitmapWithRotation(files[0].absolutePath, sampleSize = 8)
             galleryButton.setImageBitmap(bitmap)
         } else {
             galleryButton.setImageDrawable(null)

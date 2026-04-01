@@ -1,6 +1,5 @@
 package com.kioskcamera
 
-import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.os.Bundle
 import android.view.GestureDetector
@@ -63,7 +62,7 @@ class PhotoViewerActivity : AppCompatActivity() {
         if (photos.isEmpty()) { finish(); return }
 
         val file = photos[currentIndex]
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+        val bitmap = decodeBitmapWithRotation(file.absolutePath)
         imageView.setImageBitmap(bitmap)
 
         // Reset zoom

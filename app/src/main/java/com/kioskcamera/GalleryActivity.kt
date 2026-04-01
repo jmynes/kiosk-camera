@@ -1,7 +1,6 @@
 package com.kioskcamera
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -118,8 +117,7 @@ class GalleryActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val file = photos[position]
 
-            val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath, options)
+            val bitmap = decodeBitmapWithRotation(file.absolutePath, sampleSize = 4)
             holder.imageView.setImageBitmap(bitmap)
 
             val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
