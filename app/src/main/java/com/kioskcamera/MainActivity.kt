@@ -830,6 +830,62 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({ statusText.visibility = View.GONE }, 3000)
     }
 
+    private var volumeDownTime = 0L
+    private var volumeHeld = false
+    private val volumeLongPressRunnable = Runnable {
+        if (volumeHeld && !isVideoMode && !isRecording) {
+            longPressStartedFromPhoto = true
+            pendingRecordOnBind = true
+            setMode(true)
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+            keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (event?.repeatCount == 0) {
+                volumeDownTime = System.currentTimeMillis()
+                volumeHeld = true
+                longPressStartedFromPhoto = false
+                if (!isVideoMode && !isRecording) {
+                    handler.postDelayed(volumeLongPressRunnable, 500)
+                }
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+            keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            val held = System.currentTimeMillis() - volumeDownTime
+            volumeHeld = false
+            handler.removeCallbacks(volumeLongPressRunnable)
+
+            if (longPressStartedFromPhoto) {
+                revertToPhotoAfterRecording = true
+                if (isRecording) {
+                    stopRecording()
+                } else {
+                    pendingRecordOnBind = false
+                    handler.postDelayed({
+                        if (revertToPhotoAfterRecording && !isRecording) {
+                            revertToPhotoAfterRecording = false
+                            setMode(false)
+                        }
+                    }, 500)
+                }
+                longPressStartedFromPhoto = false
+            } else if (held < 500) {
+                pulseButton(captureButton)
+                onShutterPressed()
+            }
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
     override fun onDestroy() {
         isDestroyed = true
         if (isRecording) {
