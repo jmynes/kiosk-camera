@@ -1,8 +1,10 @@
 package com.kioskcamera
 
 import android.media.MediaMetadataRetriever
+import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -39,6 +41,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     private val currentIndex: Int get() = pager.currentItem
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -58,6 +61,20 @@ class PhotoViewerActivity : AppCompatActivity() {
         floatingMute.setOnClickListener { toggleMute() }
         topBar = findViewById(R.id.topBar)
         bottomContainer = findViewById(R.id.bottomContainer)
+
+        // Prevent swipes on controls from triggering ViewPager2 page changes
+        // Disable ViewPager2 input directly while touching overlays
+        val consumeSwipe = View.OnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> pager.isUserInputEnabled = false
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> pager.isUserInputEnabled = true
+            }
+            false
+        }
+        bottomContainer.setOnTouchListener(consumeSwipe)
+        topBar.setOnTouchListener(consumeSwipe)
+        floatingPlayPause.setOnTouchListener(consumeSwipe)
+        floatingMute.setOnTouchListener(consumeSwipe)
 
         val startPath = intent.getStringExtra("photo_path")
             ?: intent.getStringExtra("video_path")
