@@ -57,8 +57,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var exposureSlider: SeekBar
     private lateinit var exposureText: TextView
     private lateinit var countdownText: TextView
-    private lateinit var photoModeButton: TextView
-    private lateinit var videoModeButton: TextView
+    private lateinit var photoModeButton: ImageButton
+    private lateinit var videoModeButton: ImageButton
     private lateinit var recordingTimer: TextView
 
     private var imageCapture: ImageCapture? = null
@@ -239,10 +239,8 @@ class MainActivity : AppCompatActivity() {
         if (isRecording) return // Don't switch while recording
         isVideoMode = video
 
-        photoModeButton.setTextColor(if (!video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
-        photoModeButton.setTypeface(null, if (!video) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-        videoModeButton.setTextColor(if (video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
-        videoModeButton.setTypeface(null, if (video) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        photoModeButton.setColorFilter(if (!video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+        videoModeButton.setColorFilter(if (video) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
 
         captureButton.setBackgroundResource(if (video) R.drawable.record_button else R.drawable.shutter_button)
 
