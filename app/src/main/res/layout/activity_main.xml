@@ -161,11 +161,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="160dp"
-        android:padding="6dp"
-        android:background="#80000000"
-        android:textColor="#FF4444"
-        android:textSize="16sp"
+        android:layout_marginBottom="12dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:background="@drawable/recording_pill"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
         android:textStyle="bold"
         android:visibility="gone" />
 
