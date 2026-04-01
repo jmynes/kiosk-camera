@@ -11,6 +11,22 @@
         android:scaleType="centerCrop"
         android:contentDescription="Photo thumbnail" />
 
+    <View
+        android:id="@+id/selectionOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:background="#4D448AFF"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/checkMark"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="4dp"
+        android:src="@android:drawable/checkbox_on_background"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/timeText"
         android:layout_width="wrap_content"
