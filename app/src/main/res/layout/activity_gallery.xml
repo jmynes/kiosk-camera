@@ -111,7 +111,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="Uploaded"
+            android:text="History"
             android:textColor="#888888"
             android:textSize="14sp"
             android:background="?attr/selectableItemBackground" />

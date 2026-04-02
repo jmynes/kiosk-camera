@@ -116,7 +116,7 @@ class GalleryActivity : AppCompatActivity() {
         tabUploaded.setTextColor(if (!showingQueue) 0xFFFFD700.toInt() else 0xFF888888.toInt())
         tabUploaded.setTypeface(null, if (!showingQueue) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
 
-        titleText.text = if (showingQueue) "Queue" else "Uploaded"
+        titleText.text = if (showingQueue) "Queue" else "History"
 
         // Show upload FAB only on queue tab
         uploadButton.visibility = if (showingQueue) View.VISIBLE else View.GONE
@@ -222,11 +222,12 @@ class GalleryActivity : AppCompatActivity() {
         val count = selectedPositions.size
         if (count == 0) return
 
-        val message = if (!showingQueue) "This only deletes the local cache. To delete from the server, use a computer." else null
+        val action = if (showingQueue) "Delete" else "Clear"
+        val message = if (!showingQueue) "This only clears the local history. To delete from the server, use a computer." else null
         AlertDialog.Builder(this)
-            .setTitle("Delete $count item${if (count > 1) "s" else ""}?")
+            .setTitle("$action $count item${if (count > 1) "s" else ""}?")
             .apply { if (message != null) setMessage(message) }
-            .setPositiveButton("Delete") { _, _ ->
+            .setPositiveButton(action) { _, _ ->
                 val files = selectedPositions.sortedDescending().map { adapter.getFile(it) }
                 files.forEach { it.delete() }
                 exitSelectionMode()
@@ -284,7 +285,7 @@ class GalleryActivity : AppCompatActivity() {
         if (adapter.itemCount == 0) {
             emptyText.visibility = View.VISIBLE
             recyclerView.visibility = View.GONE
-            emptyText.text = if (showingQueue) "No media queued" else "No uploaded media"
+            emptyText.text = if (showingQueue) "No media queued" else "No upload history"
         } else {
             emptyText.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
@@ -356,7 +357,7 @@ class GalleryActivity : AppCompatActivity() {
             } else {
                 UploadManager.getUploadedFiles(this).size
             }
-            val label = if (showingQueue) "queued" else "uploaded"
+            val label = if (showingQueue) "queued" else "in history"
             footer.text = "Project: $project  •  $count $label"
             footer.visibility = View.VISIBLE
         } else {
@@ -381,15 +382,22 @@ class GalleryActivity : AppCompatActivity() {
         val count = adapter.itemCount
         if (count == 0) return
 
-        val message = if (showingQueue) {
-            "This will remove all queued photos and videos."
+        val message: String
+        val title: String
+        val button: String
+        if (showingQueue) {
+            title = "Delete all $count items?"
+            message = "This will remove all queued photos and videos."
+            button = "Delete All"
         } else {
-            "This only deletes the local cache. To delete from the server, use a computer."
+            title = "Clear all $count items?"
+            message = "This only clears the local history. To delete from the server, use a computer."
+            button = "Clear All"
         }
         AlertDialog.Builder(this)
-            .setTitle("Delete all $count items?")
+            .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Delete All") { _, _ ->
+            .setPositiveButton(button) { _, _ ->
                 if (showingQueue) {
                     UploadManager.getQueueDir(this).listFiles()?.forEach { it.delete() }
                 } else {
