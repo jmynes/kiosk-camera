@@ -9,9 +9,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.os.Handler
+import android.os.Looper
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
@@ -52,6 +55,7 @@ class GalleryActivity : AppCompatActivity() {
         selectionCount = findViewById(R.id.selectionCount)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.uploadButton).setOnClickListener { uploadAll() }
         findViewById<ImageButton>(R.id.clearAllButton).setOnClickListener { confirmClearAll() }
         findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { exitSelectionMode() }
         findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { deleteSelected() }
@@ -210,6 +214,39 @@ class GalleryActivity : AppCompatActivity() {
             emptyText.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
         }
+    }
+
+    private fun uploadAll() {
+        val count = UploadManager.getPendingCount(this)
+        if (count == 0) {
+            Toast.makeText(this, "Nothing to upload", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val uploadButton = findViewById<ImageButton>(R.id.uploadButton)
+        uploadButton.isEnabled = false
+        uploadButton.alpha = 0.5f
+        Toast.makeText(this, "Uploading $count file(s)...", Toast.LENGTH_SHORT).show()
+
+        val mainHandler = Handler(Looper.getMainLooper())
+        UploadManager.uploadAll(this,
+            onProgress = { msg ->
+                mainHandler.post {
+                    findViewById<TextView>(R.id.titleText).text = msg
+                }
+            },
+            onComplete = { uploaded, failed ->
+                mainHandler.post {
+                    uploadButton.isEnabled = true
+                    uploadButton.alpha = 1f
+                    findViewById<TextView>(R.id.titleText).text = "Queued Media"
+                    val msg = if (failed == 0) "Uploaded $uploaded file(s)"
+                              else "Uploaded $uploaded, failed $failed"
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    refreshPhotos()
+                }
+            }
+        )
     }
 
     private fun confirmClearAll() {

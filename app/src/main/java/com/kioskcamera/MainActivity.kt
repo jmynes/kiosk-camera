@@ -67,7 +67,6 @@ class MainActivity : AppCompatActivity() {
     private var camera: Camera? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var uploadExecutor: ExecutorService
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var httpClient: OkHttpClient
     private var isDestroyed = false
@@ -142,7 +141,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "KioskCamera"
         private const val CAMERA_PERMISSION_CODE = 100
-        private const val UPLOAD_RETRY_INTERVAL_MS = 60_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -171,7 +169,6 @@ class MainActivity : AppCompatActivity() {
         recordingTimer = findViewById(R.id.recordingTimer)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
-        uploadExecutor = Executors.newSingleThreadExecutor()
         httpClient = createHttpClient()
         ScpUploader.init(this)
 
@@ -188,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                 CAMERA_PERMISSION_CODE)
         }
 
-        startUploadLoop()
+        UploadManager.init(httpClient)
     }
 
     override fun onResume() {
@@ -787,9 +784,6 @@ class MainActivity : AppCompatActivity() {
                         captureButton.isEnabled = true
                         updateGalleryThumbnail()
                     }
-                    if (!isDestroyed) {
-                        uploadExecutor.execute { uploadPendingPhotos() }
-                    }
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -823,80 +817,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- Upload Logic ---
+    // --- Queue Directory ---
 
     private fun getQueueDir(): File {
         val dir = File(filesDir, "upload_queue")
         if (!dir.exists()) dir.mkdirs()
         return dir
-    }
-
-    private fun uploadPendingPhotos() {
-        val queueDir = getQueueDir()
-        val files = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" } ?: return
-
-        for (file in files.sortedBy { it.lastModified() }) {
-            if (isDestroyed) return
-            if (uploadFile(file)) {
-                file.delete()
-                Log.i(TAG, "Uploaded and deleted: ${file.name}")
-                handler.post { showStatus("Uploaded ${file.name}") }
-            } else {
-                Log.w(TAG, "Upload failed for ${file.name}, will retry later")
-                handler.post {
-                    val pending = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }?.size ?: 0
-                    showStatus("$pending file(s) queued for upload")
-                }
-                break
-            }
-        }
-    }
-
-    private fun uploadFile(file: File): Boolean {
-        if (BuildConfig.USE_SCP) {
-            return ScpUploader.uploadFile(
-                file, BuildConfig.SCP_HOST, BuildConfig.SCP_PORT,
-                BuildConfig.SCP_USER, BuildConfig.SCP_PATH
-            )
-        }
-
-        val mediaType = if (file.extension == "mp4") "video/mp4" else "image/jpeg"
-        val fieldName = if (file.extension == "mp4") "video" else "photo"
-
-        val requestBody = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(fieldName, file.name, file.asRequestBody(mediaType.toMediaType()))
-            .build()
-
-        val request = Request.Builder()
-            .url(uploadUrl)
-            .post(requestBody)
-            .build()
-
-        return try {
-            Log.i(TAG, "Uploading ${file.name} to $uploadUrl")
-            val response = httpClient.newCall(request).execute()
-            val success = response.isSuccessful
-            Log.i(TAG, "Upload response: ${response.code} ${response.message}")
-            response.close()
-            success
-        } catch (e: Exception) {
-            Log.e(TAG, "Upload exception: ${e.javaClass.simpleName}: ${e.message}", e)
-            false
-        }
-    }
-
-    private val uploadRunnable = object : Runnable {
-        override fun run() {
-            if (!isDestroyed) {
-                uploadExecutor.execute { uploadPendingPhotos() }
-                handler.postDelayed(this, UPLOAD_RETRY_INTERVAL_MS)
-            }
-        }
-    }
-
-    private fun startUploadLoop() {
-        handler.postDelayed(uploadRunnable, UPLOAD_RETRY_INTERVAL_MS)
     }
 
     private fun pulseButton(view: View) {
@@ -990,11 +916,9 @@ class MainActivity : AppCompatActivity() {
         }
         orientationListener.disable()
         countdownTimer?.cancel()
-        handler.removeCallbacks(uploadRunnable)
         handler.removeCallbacks(timerUpdateRunnable)
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
-        uploadExecutor.shutdown()
         super.onDestroy()
     }
 }

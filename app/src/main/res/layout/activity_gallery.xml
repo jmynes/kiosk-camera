@@ -33,6 +33,14 @@
             android:paddingStart="12dp" />
 
         <ImageButton
+            android:id="@+id/uploadButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_cloud_upload"
+            android:contentDescription="Upload all" />
+
+        <ImageButton
             android:id="@+id/clearAllButton"
             android:layout_width="40dp"
             android:layout_height="40dp"
