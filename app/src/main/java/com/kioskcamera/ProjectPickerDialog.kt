@@ -43,11 +43,8 @@ object ProjectPickerDialog {
             }
             layout.addView(empty)
         } else {
+            val maxHeight = (context.resources.displayMetrics.heightPixels * 0.4).toInt()
             val scrollView = ScrollView(context).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
             }
             val listLayout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -114,6 +111,23 @@ object ProjectPickerDialog {
 
             scrollView.addView(listLayout)
             layout.addView(scrollView)
+
+            // Cap scroll height, then scroll to active project
+            val activeIndex = projects.indexOf(activeProject)
+            scrollView.post {
+                if (scrollView.height > maxHeight) {
+                    scrollView.layoutParams = scrollView.layoutParams.apply { height = maxHeight }
+                    scrollView.requestLayout()
+                }
+                scrollView.postDelayed({
+                    if (activeIndex >= 0) {
+                        val child = listLayout.getChildAt(activeIndex)
+                        if (child != null) {
+                            scrollView.scrollTo(0, child.top)
+                        }
+                    }
+                }, 100)
+            }
         }
 
         val spacer = View(context).apply {
