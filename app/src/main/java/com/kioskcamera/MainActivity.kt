@@ -475,6 +475,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startRecording() {
+        shutterSound.play(android.media.MediaActionSound.START_VIDEO_RECORDING)
         val vc = videoCapture ?: return
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -549,6 +550,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopRecording() {
+        shutterSound.play(android.media.MediaActionSound.STOP_VIDEO_RECORDING)
         activeRecording?.stop()
         activeRecording = null
     }
@@ -778,8 +780,14 @@ class MainActivity : AppCompatActivity() {
 
     private val saveExecutor = Executors.newFixedThreadPool(4)
     private var captureCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private val shutterSound = android.media.MediaActionSound().apply {
+        load(android.media.MediaActionSound.SHUTTER_CLICK)
+        load(android.media.MediaActionSound.START_VIDEO_RECORDING)
+        load(android.media.MediaActionSound.STOP_VIDEO_RECORDING)
+    }
 
     private fun takePhoto() {
+        shutterSound.play(android.media.MediaActionSound.SHUTTER_CLICK)
         flashScreen()
         val imageCapture = imageCapture ?: return
 
