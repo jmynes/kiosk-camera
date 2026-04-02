@@ -153,13 +153,22 @@ fi
 echo ""
 
 ###############################################
-#  Step 5: Grant additional permissions      #
+#  Step 5: Grant permissions & system prefs  #
 ###############################################
-echo "[5/8] Granting additional permissions..."
+echo "[5/8] Granting permissions and configuring system..."
 adb shell appops set "$FREEKIOSK_PKG" android:get_usage_stats allow 2>/dev/null || true
 echo "  Usage stats: granted"
 adb shell pm grant "$FREEKIOSK_PKG" android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true
 echo "  Secure settings: granted"
+
+# Set 3-button navigation (back, home, recents) instead of gesture nav
+adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton 2>/dev/null || true
+echo "  Navigation: 3-button mode"
+
+# Show battery percentage in status bar
+adb shell settings put system status_bar_show_battery_percent 1 2>/dev/null || true
+adb shell settings put global battery_percentage_enabled 1 2>/dev/null || true
+echo "  Battery: percentage enabled"
 echo ""
 
 ###############################################
