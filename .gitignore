@@ -8,6 +8,21 @@
 .externalNativeBuild
 .cxx
 
+# Build artifacts
+*.apk
+*.aab
+*.dex
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
 # Private keys and cert artifacts
 receiver/certs/*.key
 receiver/certs/*.csr
