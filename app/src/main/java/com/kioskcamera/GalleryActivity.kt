@@ -329,11 +329,14 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun showProjectPicker() {
-        ProjectPickerDialog.show(this) { project ->
+        ProjectPickerDialog.show(this, onProjectSelected = { project ->
             ProjectManager.setActiveProject(this, project)
             updateProjectFab()
             refreshPhotos()
-        }
+        }, onDismiss = {
+            updateProjectFab()
+            refreshPhotos()
+        })
     }
 
     private fun confirmClearAll() {

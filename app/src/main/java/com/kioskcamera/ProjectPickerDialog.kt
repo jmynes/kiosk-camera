@@ -14,7 +14,7 @@ import android.widget.TextView
 
 object ProjectPickerDialog {
 
-    fun show(context: Context, onProjectSelected: (String) -> Unit) {
+    fun show(context: Context, onProjectSelected: (String) -> Unit, onDismiss: (() -> Unit)? = null) {
         val projects = ProjectManager.getProjects(context)
         val activeProject = ProjectManager.getActiveProject(context)
         val dp = { px: Int -> (px * context.resources.displayMetrics.density).toInt() }
@@ -40,6 +40,7 @@ object ProjectPickerDialog {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(0xFFFF6B6B.toInt())
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(0xFFBB86FC.toInt())
         }
+        dialog.setOnDismissListener { onDismiss?.invoke() }
 
         if (!hasProjects) {
             val empty = TextView(context).apply {

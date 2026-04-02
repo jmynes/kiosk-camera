@@ -903,26 +903,44 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateProjectButton() {
         val project = activeProject
+        val hasProjects = ProjectManager.getProjects(this).isNotEmpty()
         if (project != null) {
             projectButton.text = project
             projectButton.setTextColor(0xFFFFD700.toInt())
             projectFooter.text = "Project: $project"
             projectFooter.visibility = View.VISIBLE
+        } else if (!hasProjects) {
+            projectButton.text = "NEW"
+            projectButton.setTextColor(0xFF448AFF.toInt())
+            projectFooter.text = "No project — tap to create"
+            projectFooter.visibility = View.VISIBLE
+            projectFooter.setTextColor(0xFF888888.toInt())
         } else {
             projectButton.text = "PRJ"
             projectButton.setTextColor(0xFFFFFFFF.toInt())
-            projectFooter.visibility = View.GONE
+            projectFooter.text = "No project selected"
+            projectFooter.visibility = View.VISIBLE
+            projectFooter.setTextColor(0xFF888888.toInt())
+        }
+        // Restore gold for when project is set
+        if (project != null) {
+            projectFooter.setTextColor(0xFFFFD700.toInt())
         }
     }
 
     private fun showProjectPicker() {
-        ProjectPickerDialog.show(this) { project ->
+        ProjectPickerDialog.show(this, onProjectSelected = { project ->
             activeProject = project
             ProjectManager.setActiveProject(this, project)
             updateProjectButton()
             updateGalleryThumbnail()
             showStatus("Project: $project")
-        }
+        }, onDismiss = {
+            // Sync in case manage dialog changed active project
+            activeProject = ProjectManager.getActiveProject(this)
+            updateProjectButton()
+            updateGalleryThumbnail()
+        })
     }
 
     private fun showStatus(message: String) {
