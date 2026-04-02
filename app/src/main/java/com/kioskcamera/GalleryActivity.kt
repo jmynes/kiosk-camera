@@ -319,7 +319,13 @@ class GalleryActivity : AppCompatActivity() {
         if (project != null) {
             projectFab.text = project
             projectFab.setTextColor(0xFFFFD700.toInt())
-            footer.text = "Project: $project"
+            val count = if (showingQueue) {
+                UploadManager.getFilesForProject(this, project).size
+            } else {
+                UploadManager.getUploadedFiles(this).size
+            }
+            val label = if (showingQueue) "queued" else "uploaded"
+            footer.text = "Project: $project  •  $count $label"
             footer.visibility = View.VISIBLE
         } else {
             projectFab.text = "PRJ"
