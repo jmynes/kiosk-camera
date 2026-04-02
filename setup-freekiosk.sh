@@ -197,7 +197,10 @@ echo "  Usage stats: granted"
 adb shell pm grant "$FREEKIOSK_PKG" android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true
 echo "  Secure settings: granted"
 
-# Set 3-button navigation (back, home, recents) instead of gesture nav
+# Set 3-button navigation (back, home, recents) — disable all others first
+for nav in gestural gestural_narrow_back gestural_wide_back gestural_extra_wide_back twobutton; do
+    adb shell cmd overlay disable "com.android.internal.systemui.navbar.$nav" 2>/dev/null || true
+done
 adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton 2>/dev/null || true
 echo "  Navigation: 3-button mode"
 
