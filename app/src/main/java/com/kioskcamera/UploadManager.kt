@@ -49,6 +49,26 @@ object UploadManager {
         return dir
     }
 
+    data class UploadBatch(
+        val dir: File,
+        val project: String,
+        val timestamp: String,
+        val files: List<File>
+    )
+
+    fun getUploadBatches(context: Context): List<UploadBatch> {
+        val uploadedDir = getUploadedDir(context)
+        val batchDirs = uploadedDir.listFiles { f -> f.isDirectory }
+            ?.sortedByDescending { it.name } ?: emptyList()
+        return batchDirs.mapNotNull { dir ->
+            val metaFile = File(dir, ".batch_meta")
+            val project = if (metaFile.exists()) metaFile.readText().trim() else "Unknown"
+            val files = dir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
+                ?.sortedBy { it.name }?.toList() ?: emptyList()
+            if (files.isNotEmpty()) UploadBatch(dir, project, dir.name, files) else null
+        }
+    }
+
     fun getPendingCount(context: Context): Int {
         return getQueueDir(context).listFiles { f ->
             f.extension == "jpg" || f.extension == "mp4"
@@ -56,13 +76,24 @@ object UploadManager {
     }
 
     fun getUploadedFiles(context: Context): List<File> {
-        return getUploadedDir(context).listFiles { f ->
-            f.extension == "jpg" || f.extension == "mp4"
-        }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        // Flat list across all batches, plus any legacy files in root
+        val files = mutableListOf<File>()
+        val uploadedDir = getUploadedDir(context)
+        // Legacy flat files
+        uploadedDir.listFiles { f -> f.isFile && (f.extension == "jpg" || f.extension == "mp4") }
+            ?.let { files.addAll(it) }
+        // Batch subdirectories
+        uploadedDir.listFiles { f -> f.isDirectory }?.forEach { batchDir ->
+            batchDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
+                ?.let { files.addAll(it) }
+        }
+        return files.sortedByDescending { it.lastModified() }
     }
 
     fun clearUploadedCache(context: Context) {
-        getUploadedDir(context).listFiles()?.forEach { it.delete() }
+        getUploadedDir(context).listFiles()?.forEach {
+            if (it.isDirectory) it.deleteRecursively() else it.delete()
+        }
     }
 
     fun uploadFiles(
@@ -98,13 +129,22 @@ object UploadManager {
                     onProgress
                 )
 
-                // Cache and delete uploaded files
-                for (i in 0 until uploaded) {
-                    val file = sortedFiles[i]
-                    val cached = File(uploadedDir, file.name)
-                    file.copyTo(cached, overwrite = true)
-                    file.delete()
-                    Log.i(TAG, "Uploaded and cached: ${file.name}")
+                // Cache into batch subdirectory
+                if (uploaded > 0) {
+                    val batchTimestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                    val batchDir = File(uploadedDir, batchTimestamp)
+                    batchDir.mkdirs()
+                    // Write batch metadata
+                    File(batchDir, ".batch_meta").writeText(projectNumber)
+
+                    for (i in 0 until uploaded) {
+                        val file = sortedFiles[i]
+                        val remoteName = renamedFiles[i].second
+                        val cached = File(batchDir, remoteName)
+                        file.copyTo(cached, overwrite = true)
+                        file.delete()
+                        Log.i(TAG, "Uploaded and cached: ${remoteName}")
+                    }
                 }
 
                 onComplete(uploaded, failed)

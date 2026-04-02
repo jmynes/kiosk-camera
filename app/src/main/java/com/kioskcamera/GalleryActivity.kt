@@ -27,7 +27,7 @@ class GalleryActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyText: TextView
-    private lateinit var adapter: PhotoAdapter
+    private lateinit var adapter: GalleryAdapter
     private lateinit var normalBar: View
     private lateinit var selectionBar: View
     private lateinit var selectionCount: TextView
@@ -78,8 +78,14 @@ class GalleryActivity : AppCompatActivity() {
         tabQueue.setOnClickListener { switchTab(true) }
         tabUploaded.setOnClickListener { switchTab(false) }
 
-        recyclerView.layoutManager = GridLayoutManager(this, 3)
-        adapter = PhotoAdapter(getFiles())
+        val gridLayoutManager = GridLayoutManager(this, 3)
+        gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                return if (adapter.isHeader(position)) 3 else 1
+            }
+        }
+        recyclerView.layoutManager = gridLayoutManager
+        adapter = GalleryAdapter(getItems())
         recyclerView.adapter = adapter
 
         setupDragSelect()
@@ -154,6 +160,7 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     fun onItemLongPress(position: Int) {
+        if (adapter.isHeader(position)) return
         if (!isSelectionMode) {
             enterSelectionMode()
         }
@@ -165,6 +172,7 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     fun onItemTap(position: Int) {
+        if (adapter.isHeader(position)) return
         if (isSelectionMode) {
             toggleSelection(position)
         } else {
@@ -234,18 +242,40 @@ class GalleryActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun getFiles(): MutableList<File> {
+    // Items can be files or batch headers (for uploaded tab)
+    sealed class GalleryItem {
+        data class Photo(val file: File) : GalleryItem()
+        data class BatchHeader(val project: String, val timestamp: String, val count: Int) : GalleryItem()
+    }
+
+    private fun getItems(): MutableList<GalleryItem> {
         val project = ProjectManager.getActiveProject(this)
         return if (showingQueue) {
-            UploadManager.getFilesForProject(this, project).toMutableList()
+            UploadManager.getFilesForProject(this, project)
+                .map { GalleryItem.Photo(it) }.toMutableList()
         } else {
-            UploadManager.getUploadedFiles(this).toMutableList()
+            val batches = UploadManager.getUploadBatches(this)
+            val items = mutableListOf<GalleryItem>()
+            for (batch in batches) {
+                items.add(GalleryItem.BatchHeader(batch.project, batch.timestamp, batch.files.size))
+                batch.files.forEach { items.add(GalleryItem.Photo(it)) }
+            }
+            // Legacy flat files
+            val legacyFiles = UploadManager.getUploadedDir(this)
+                .listFiles { f -> f.isFile && (f.extension == "jpg" || f.extension == "mp4") }
+                ?.sortedByDescending { it.lastModified() } ?: emptyList()
+            if (legacyFiles.isNotEmpty()) {
+                items.add(GalleryItem.BatchHeader("Unsorted", "", legacyFiles.size))
+                legacyFiles.forEach { items.add(GalleryItem.Photo(it)) }
+            }
+            items
         }
     }
 
     private fun refreshPhotos() {
-        adapter.updatePhotos(getFiles())
+        adapter.updateItems(getItems())
         updateEmptyState()
+        updateProjectFab()
     }
 
     private fun updateEmptyState() {
@@ -378,11 +408,14 @@ class GalleryActivity : AppCompatActivity() {
         }
     }
 
-    inner class PhotoAdapter(
-        private var photos: MutableList<File>
-    ) : RecyclerView.Adapter<PhotoAdapter.ViewHolder>() {
+    private val TYPE_PHOTO = 0
+    private val TYPE_HEADER = 1
 
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    inner class GalleryAdapter(
+        private var items: MutableList<GalleryItem>
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        inner class PhotoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val imageView: ImageView = view.findViewById(R.id.thumbImage)
             val timeText: TextView = view.findViewById(R.id.timeText)
             val selectionOverlay: View = view.findViewById(R.id.selectionOverlay)
@@ -390,46 +423,88 @@ class GalleryActivity : AppCompatActivity() {
             var currentPath: String? = null
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = android.view.LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_photo, parent, false)
-            return ViewHolder(view)
+        inner class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val batchProject: TextView = view.findViewById(R.id.batchProject)
+            val batchInfo: TextView = view.findViewById(R.id.batchInfo)
         }
 
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val file = photos[position]
-            val path = file.absolutePath
-            holder.currentPath = path
-
-            holder.imageView.setImageDrawable(ColorDrawable(Color.DKGRAY))
-            ThumbnailCache.loadThumbnail(file, holder.imageView) { holder.currentPath }
-
-            val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
-            val label = if (file.extension == "mp4") "▶ " else ""
-            holder.timeText.text = label + sdf.format(Date(file.lastModified()))
-
-            val selected = position in selectedPositions
-            holder.selectionOverlay.visibility = if (selected) View.VISIBLE else View.GONE
-            holder.checkMark.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
-            holder.checkMark.setImageResource(
-                if (selected) R.drawable.ic_select_checked else R.drawable.ic_select_unchecked
-            )
-
-            holder.itemView.setOnClickListener {
-                onItemTap(holder.bindingAdapterPosition)
-            }
-            holder.itemView.setOnLongClickListener {
-                onItemLongPress(holder.bindingAdapterPosition)
-                true
+        override fun getItemViewType(position: Int): Int {
+            return when (items[position]) {
+                is GalleryItem.Photo -> TYPE_PHOTO
+                is GalleryItem.BatchHeader -> TYPE_HEADER
             }
         }
 
-        override fun getItemCount() = photos.size
+        fun isHeader(position: Int): Boolean {
+            return position in items.indices && items[position] is GalleryItem.BatchHeader
+        }
 
-        fun getFile(position: Int) = photos[position]
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == TYPE_HEADER) {
+                val view = android.view.LayoutInflater.from(parent.context)
+                    .inflate(R.layout.item_batch_header, parent, false)
+                HeaderViewHolder(view)
+            } else {
+                val view = android.view.LayoutInflater.from(parent.context)
+                    .inflate(R.layout.item_photo, parent, false)
+                PhotoViewHolder(view)
+            }
+        }
 
-        fun updatePhotos(newPhotos: MutableList<File>) {
-            photos = newPhotos
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (val item = items[position]) {
+                is GalleryItem.BatchHeader -> {
+                    val h = holder as HeaderViewHolder
+                    h.batchProject.text = item.project
+                    val timeLabel = if (item.timestamp.isNotEmpty()) {
+                        // Format yyyyMMdd_HHmmss to readable
+                        try {
+                            val parsed = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).parse(item.timestamp)
+                            SimpleDateFormat("MMM d, h:mm a", Locale.US).format(parsed!!)
+                        } catch (e: Exception) { item.timestamp }
+                    } else ""
+                    h.batchInfo.text = "${item.count} file${if (item.count != 1) "s" else ""}${if (timeLabel.isNotEmpty()) "  •  $timeLabel" else ""}"
+                }
+                is GalleryItem.Photo -> {
+                    val h = holder as PhotoViewHolder
+                    val file = item.file
+                    val path = file.absolutePath
+                    h.currentPath = path
+
+                    h.imageView.setImageDrawable(ColorDrawable(Color.DKGRAY))
+                    ThumbnailCache.loadThumbnail(file, h.imageView) { h.currentPath }
+
+                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
+                    val label = if (file.extension == "mp4") "▶ " else ""
+                    h.timeText.text = label + sdf.format(Date(file.lastModified()))
+
+                    val selected = position in selectedPositions
+                    h.selectionOverlay.visibility = if (selected) View.VISIBLE else View.GONE
+                    h.checkMark.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+                    h.checkMark.setImageResource(
+                        if (selected) R.drawable.ic_select_checked else R.drawable.ic_select_unchecked
+                    )
+
+                    h.itemView.setOnClickListener {
+                        onItemTap(h.bindingAdapterPosition)
+                    }
+                    h.itemView.setOnLongClickListener {
+                        onItemLongPress(h.bindingAdapterPosition)
+                        true
+                    }
+                }
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        fun getFile(position: Int): File {
+            val item = items[position]
+            return (item as? GalleryItem.Photo)?.file ?: File("")
+        }
+
+        fun updateItems(newItems: MutableList<GalleryItem>) {
+            items = newItems
             notifyDataSetChanged()
         }
     }
