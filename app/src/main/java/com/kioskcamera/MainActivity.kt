@@ -142,7 +142,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "KioskCamera"
         private const val CAMERA_PERMISSION_CODE = 100
-        private const val UPLOAD_RETRY_INTERVAL_MS = 30_000L
+        private const val UPLOAD_RETRY_INTERVAL_MS = 60_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -173,6 +173,7 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
         uploadExecutor = Executors.newSingleThreadExecutor()
         httpClient = createHttpClient()
+        ScpUploader.init(this)
 
         setupZoomGesture()
         setupControls()
@@ -852,6 +853,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun uploadFile(file: File): Boolean {
+        if (BuildConfig.USE_SCP) {
+            return ScpUploader.uploadFile(
+                file, BuildConfig.SCP_HOST, BuildConfig.SCP_PORT,
+                BuildConfig.SCP_USER, BuildConfig.SCP_PATH
+            )
+        }
+
         val mediaType = if (file.extension == "mp4") "video/mp4" else "image/jpeg"
         val fieldName = if (file.extension == "mp4") "video" else "photo"
 

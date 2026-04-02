@@ -7,3 +7,10 @@
 /captures
 .externalNativeBuild
 .cxx
+
+# Private keys and cert artifacts
+receiver/certs/*.key
+receiver/certs/*.csr
+receiver/certs/*.srl
+receiver/certs/ip.txt
+receiver/certs/pin.txt
