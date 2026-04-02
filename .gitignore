@@ -24,7 +24,12 @@
 Thumbs.db
 
 # Private keys and cert artifacts
-receiver/certs/*.key
+*.key
+*.p12
+*.jks
+*.keystore
+id_rsa
+id_ed25519
 receiver/certs/*.csr
 receiver/certs/*.srl
 receiver/certs/ip.txt
