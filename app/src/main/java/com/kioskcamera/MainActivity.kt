@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewView: PreviewView
     private lateinit var captureButton: ImageButton
     private lateinit var galleryButton: ImageButton
+    private lateinit var projectButton: TextView
     private lateinit var statusText: TextView
     private lateinit var zoomText: TextView
     private lateinit var focusIndicator: FocusIndicatorView
@@ -253,6 +254,11 @@ class MainActivity : AppCompatActivity() {
         galleryButton.setOnClickListener {
             startActivity(Intent(this, GalleryActivity::class.java))
         }
+
+        projectButton = findViewById(R.id.projectButton)
+        projectButton.setOnClickListener { showProjectPicker() }
+        activeProject = ProjectManager.getActiveProject(this)
+        updateProjectButton()
 
         flashButton.setOnClickListener { cycleFlash() }
         hdrButton.setOnClickListener { toggleHdr() }
@@ -872,6 +878,79 @@ class MainActivity : AppCompatActivity() {
             start()
         }
     }
+
+    // --- Project Selection ---
+
+    private var activeProject: String? = null
+
+    private fun updateProjectButton() {
+        val project = activeProject
+        if (project != null) {
+            projectButton.text = project
+            projectButton.setTextColor(0xFFFFD700.toInt())
+        } else {
+            projectButton.text = "PRJ"
+            projectButton.setTextColor(0xFFFFFFFF.toInt())
+        }
+    }
+
+    private fun showProjectPicker() {
+        val projects = ProjectManager.getProjects(this)
+        val options = mutableListOf<String>()
+        if (activeProject != null) {
+            options.add("Clear project")
+        }
+        options.addAll(projects)
+        options.add("+ New project")
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Select project")
+            .setItems(options.toTypedArray()) { _, which ->
+                when {
+                    activeProject != null && which == 0 -> {
+                        activeProject = null
+                        ProjectManager.setActiveProject(this@MainActivity, null)
+                        updateProjectButton()
+                        showStatus("Project cleared")
+                    }
+                    which == options.size - 1 -> showCreateProject()
+                    else -> {
+                        val offset = if (activeProject != null) 1 else 0
+                        activeProject = projects[which - offset]
+                        ProjectManager.setActiveProject(this@MainActivity, activeProject)
+                        updateProjectButton()
+                        showStatus("Project: $activeProject")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showCreateProject() {
+        val input = android.widget.EditText(this).apply {
+            hint = "Project number"
+            setPadding(48, 32, 48, 32)
+        }
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("New project")
+            .setView(input)
+            .setPositiveButton("Create") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    ProjectManager.addProject(this@MainActivity, name)
+                    activeProject = name
+                    ProjectManager.setActiveProject(this@MainActivity, name)
+                    updateProjectButton()
+                    showStatus("Project: $name")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    fun getActiveProject(): String? = activeProject
 
     private fun showStatus(message: String) {
         statusText.text = message

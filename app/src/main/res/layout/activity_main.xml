@@ -241,11 +241,19 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <!-- Placeholder for symmetry -->
-        <View
+        <!-- Project selector -->
+        <TextView
+            android:id="@+id/projectButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_weight="0" />
+            android:layout_weight="0"
+            android:gravity="center"
+            android:text="PRJ"
+            android:textColor="@android:color/white"
+            android:textSize="10sp"
+            android:background="@drawable/gallery_button_bg"
+            android:singleLine="true"
+            android:ellipsize="end" />
 
     </LinearLayout>
 

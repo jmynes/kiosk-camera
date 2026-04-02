@@ -256,36 +256,39 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun onUploadPressed() {
-        if (isSelectionMode && selectedPositions.isNotEmpty()) {
-            val count = selectedPositions.size
-            AlertDialog.Builder(this)
-                .setTitle("Upload $count item${if (count > 1) "s" else ""}?")
-                .setMessage("Uploads are one-way. To delete from the server, use a computer.")
-                .setPositiveButton("Upload") { _, _ ->
-                    val files = selectedPositions.sorted().map { adapter.getFile(it) }
-                    exitSelectionMode()
-                    doUpload(files)
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        } else {
-            val count = UploadManager.getPendingCount(this)
-            if (count == 0) {
-                Toast.makeText(this, "Nothing to upload", Toast.LENGTH_SHORT).show()
-                return
-            }
-            AlertDialog.Builder(this)
-                .setTitle("Upload all $count item${if (count > 1) "s" else ""}?")
-                .setMessage("Uploads are one-way. To delete from the server, use a computer.")
-                .setPositiveButton("Upload") { _, _ ->
-                    doUpload(null)
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+        val project = ProjectManager.getActiveProject(this)
+        if (project == null) {
+            Toast.makeText(this, "Set a project in the camera view first", Toast.LENGTH_LONG).show()
+            return
         }
+
+        val filesToUpload: List<File>
+        if (isSelectionMode && selectedPositions.isNotEmpty()) {
+            filesToUpload = selectedPositions.sorted().map { adapter.getFile(it) }
+            exitSelectionMode()
+        } else {
+            filesToUpload = UploadManager.getQueueDir(this).listFiles { f ->
+                f.extension == "jpg" || f.extension == "mp4"
+            }?.toList() ?: emptyList()
+        }
+
+        if (filesToUpload.isEmpty()) {
+            Toast.makeText(this, "Nothing to upload", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val count = filesToUpload.size
+        AlertDialog.Builder(this)
+            .setTitle("Upload $count file${if (count > 1) "s" else ""} to \"$project\"?")
+            .setMessage("Uploads are one-way. To delete from the server, use a computer.")
+            .setPositiveButton("Upload") { _, _ ->
+                doUpload(filesToUpload, project)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
-    private fun doUpload(files: List<File>?) {
+    private fun doUpload(files: List<File>, project: String) {
         uploadButton.isEnabled = false
         uploadButton.alpha = 0.5f
 
@@ -298,18 +301,14 @@ class GalleryActivity : AppCompatActivity() {
                 uploadButton.isEnabled = true
                 uploadButton.alpha = 1f
                 updateTabState()
-                val msg = if (failed == 0) "Uploaded $uploaded file(s)"
+                val msg = if (failed == 0) "Uploaded $uploaded to \"$project\""
                           else "Uploaded $uploaded, failed $failed"
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 refreshPhotos()
             }
         }
 
-        if (files != null) {
-            UploadManager.uploadFiles(this, files, onProgress, onComplete)
-        } else {
-            UploadManager.uploadAll(this, onProgress, onComplete)
-        }
+        UploadManager.uploadFiles(this, files, project, onProgress, onComplete)
     }
 
     private fun confirmClearAll() {

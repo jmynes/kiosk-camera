@@ -87,6 +87,65 @@ object ScpUploader {
     }
 
     fun uploadFile(file: File, host: String, port: Int, username: String, remotePath: String): Boolean {
+        return uploadFileAs(file, file.name, host, port, username, remotePath)
+    }
+
+    fun uploadBatch(
+        files: List<Pair<File, String>>, // file to remote filename
+        host: String, port: Int, username: String, remotePath: String,
+        onProgress: ((String) -> Unit)? = null
+    ): Pair<Int, Int> {
+        val dir = keyDir ?: return Pair(0, files.size)
+        val privKeyFile = File(dir, KEY_FILE)
+        if (!privKeyFile.exists()) return Pair(0, files.size)
+
+        val config = DefaultConfig()
+        val ssh = SSHClient(config)
+        var uploaded = 0
+        var failed = 0
+
+        try {
+            Log.i(TAG, "Connecting to $host:$port as $username")
+            ssh.addHostKeyVerifier(PromiscuousVerifier())
+            ssh.connectTimeout = 60000
+            ssh.timeout = 120000
+            ssh.connect(host, port)
+
+            val keyProvider = ssh.loadKeys(privKeyFile.absolutePath)
+            ssh.authPublickey(username, keyProvider)
+
+            // Create remote directory
+            Log.i(TAG, "Creating remote dir: $remotePath")
+            val mkdirSession = ssh.startSession()
+            mkdirSession.exec("mkdir -p '$remotePath'").join()
+            mkdirSession.close()
+
+            // Upload each file
+            for ((file, remoteName) in files) {
+                if (!file.exists()) continue
+                try {
+                    onProgress?.invoke("Uploading $remoteName...")
+                    val dest = "$remotePath/$remoteName"
+                    ssh.newSCPFileTransfer().upload(FileSystemFile(file), dest)
+                    uploaded++
+                    Log.i(TAG, "SCP uploaded: $remoteName to $host:$dest")
+                } catch (e: Exception) {
+                    failed++
+                    Log.e(TAG, "SCP upload failed for $remoteName: ${e.message}")
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "SCP connection failed: ${e.javaClass.simpleName}: ${e.message}")
+            failed = files.size - uploaded
+        } finally {
+            try { ssh.disconnect() } catch (_: Exception) {}
+        }
+
+        return Pair(uploaded, failed)
+    }
+
+    private fun uploadFileAs(file: File, remoteName: String, host: String, port: Int, username: String, remotePath: String): Boolean {
         val dir = keyDir ?: return false
         val privKeyFile = File(dir, KEY_FILE)
         if (!privKeyFile.exists()) return false
@@ -99,12 +158,10 @@ object ScpUploader {
             ssh.connectTimeout = 60000
             ssh.timeout = 120000
             ssh.connect(host, port)
-            Log.i(TAG, "Connected, authenticating...")
 
             val keyProvider = ssh.loadKeys(privKeyFile.absolutePath)
             ssh.authPublickey(username, keyProvider)
 
-            Log.i(TAG, "Authenticated, uploading ${file.name}...")
             ssh.newSCPFileTransfer().upload(FileSystemFile(file), remotePath)
             Log.i(TAG, "SCP uploaded: ${file.name} to $host:$remotePath")
             true

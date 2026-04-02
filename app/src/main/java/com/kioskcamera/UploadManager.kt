@@ -6,6 +6,8 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.Executors
 
 object UploadManager {
@@ -46,75 +48,94 @@ object UploadManager {
         getUploadedDir(context).listFiles()?.forEach { it.delete() }
     }
 
-    fun uploadFiles(context: Context, files: List<File>, onProgress: (String) -> Unit, onComplete: (Int, Int) -> Unit) {
+    fun uploadFiles(
+        context: Context,
+        files: List<File>,
+        projectNumber: String,
+        onProgress: (String) -> Unit,
+        onComplete: (Int, Int) -> Unit
+    ) {
         executor.execute {
             val uploadedDir = getUploadedDir(context)
-            var uploaded = 0
-            var failed = 0
+            val sortedFiles = files.filter { it.exists() }.sortedBy { it.lastModified() }
 
-            for (file in files) {
-                if (!file.exists()) continue
-                onProgress("Uploading ${file.name}...")
-                if (uploadFile(file)) {
+            if (sortedFiles.isEmpty()) {
+                onComplete(0, 0)
+                return@execute
+            }
+
+            if (BuildConfig.USE_SCP) {
+                val remotePath = buildRemotePath(projectNumber)
+                val digitWidth = if (sortedFiles.size >= 100) 3 else 2
+                val renamedFiles = sortedFiles.mapIndexed { index, file ->
+                    val num = String.format("%0${digitWidth}d", index + 1)
+                    val remoteName = "${num}_${file.name}"
+                    Pair(file, remoteName)
+                }
+
+                onProgress("Connecting to server...")
+                val (uploaded, failed) = ScpUploader.uploadBatch(
+                    renamedFiles,
+                    BuildConfig.SCP_HOST, BuildConfig.SCP_PORT,
+                    BuildConfig.SCP_USER, remotePath,
+                    onProgress
+                )
+
+                // Cache and delete uploaded files
+                for (i in 0 until uploaded) {
+                    val file = sortedFiles[i]
                     val cached = File(uploadedDir, file.name)
                     file.copyTo(cached, overwrite = true)
                     file.delete()
-                    uploaded++
                     Log.i(TAG, "Uploaded and cached: ${file.name}")
-                    onProgress("Uploaded ${file.name}")
-                } else {
-                    failed++
-                    Log.w(TAG, "Upload failed for ${file.name}")
-                    onProgress("Failed: ${file.name}")
-                    break
                 }
-            }
 
-            onComplete(uploaded, failed)
+                onComplete(uploaded, failed)
+            } else {
+                // HTTPS fallback (no project folder structure)
+                var uploaded = 0
+                var failed = 0
+                for (file in sortedFiles) {
+                    onProgress("Uploading ${file.name}...")
+                    if (uploadFileHttp(file)) {
+                        val cached = File(uploadedDir, file.name)
+                        file.copyTo(cached, overwrite = true)
+                        file.delete()
+                        uploaded++
+                        onProgress("Uploaded ${file.name}")
+                    } else {
+                        failed++
+                        onProgress("Failed: ${file.name}")
+                        break
+                    }
+                }
+                onComplete(uploaded, failed)
+            }
         }
     }
 
-    fun uploadAll(context: Context, onProgress: (String) -> Unit, onComplete: (Int, Int) -> Unit) {
-        executor.execute {
-            val queueDir = getQueueDir(context)
-            val uploadedDir = getUploadedDir(context)
-            val files = queueDir.listFiles { f ->
-                f.extension == "jpg" || f.extension == "mp4"
-            }?.sortedBy { it.lastModified() } ?: emptyList()
+    fun uploadAll(
+        context: Context,
+        projectNumber: String,
+        onProgress: (String) -> Unit,
+        onComplete: (Int, Int) -> Unit
+    ) {
+        val queueDir = getQueueDir(context)
+        val files = queueDir.listFiles { f ->
+            f.extension == "jpg" || f.extension == "mp4"
+        }?.toList() ?: emptyList()
 
-            var uploaded = 0
-            var failed = 0
-
-            for (file in files) {
-                onProgress("Uploading ${file.name}...")
-                if (uploadFile(file)) {
-                    // Move to uploaded cache
-                    val cached = File(uploadedDir, file.name)
-                    file.copyTo(cached, overwrite = true)
-                    file.delete()
-                    uploaded++
-                    Log.i(TAG, "Uploaded and cached: ${file.name}")
-                    onProgress("Uploaded ${file.name}")
-                } else {
-                    failed++
-                    Log.w(TAG, "Upload failed for ${file.name}")
-                    onProgress("Failed: ${file.name}")
-                    break
-                }
-            }
-
-            onComplete(uploaded, failed)
-        }
+        uploadFiles(context, files, projectNumber, onProgress, onComplete)
     }
 
-    private fun uploadFile(file: File): Boolean {
-        if (BuildConfig.USE_SCP) {
-            return ScpUploader.uploadFile(
-                file, BuildConfig.SCP_HOST, BuildConfig.SCP_PORT,
-                BuildConfig.SCP_USER, BuildConfig.SCP_PATH
-            )
-        }
+    private fun buildRemotePath(projectNumber: String): String {
+        val basePath = BuildConfig.SCP_PATH.trimEnd('/')
+        val year = SimpleDateFormat("yyyy", Locale.US).format(Date())
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        return "$basePath/$projectNumber/$year/$timestamp"
+    }
 
+    private fun uploadFileHttp(file: File): Boolean {
         val client = httpClient ?: return false
         val mediaType = if (file.extension == "mp4") "video/mp4" else "image/jpeg"
         val fieldName = if (file.extension == "mp4") "video" else "photo"
@@ -130,10 +151,8 @@ object UploadManager {
             .build()
 
         return try {
-            Log.i(TAG, "Uploading ${file.name} to ${BuildConfig.UPLOAD_URL}")
             val response = client.newCall(request).execute()
             val success = response.isSuccessful
-            Log.i(TAG, "Upload response: ${response.code} ${response.message}")
             response.close()
             success
         } catch (e: Exception) {
