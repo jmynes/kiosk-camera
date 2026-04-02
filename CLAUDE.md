@@ -33,6 +33,8 @@ kiosk-camera/
         PhotoViewerActivity.kt # Media viewer: carousel, zoom, video playback, controls toggle
         VideoPlayerActivity.kt # Standalone video player (kept but unused — viewer handles video)
         UploadManager.kt       # Upload orchestration: SCP or HTTPS, queue/uploaded dir management
+        ProjectManager.kt     # Project CRUD: create, remove, active project (SharedPreferences-backed)
+        ProjectPickerDialog.kt # Shared project picker dialog with card UI, manage, and create flows
         ScpUploader.kt         # SSHJ-based SCP: keypair generation, file upload over SSH
         ZoomableImageView.kt   # Matrix-based pinch-to-zoom (GrapheneOS Camera approach)
         FocusIndicatorView.kt  # Tap-to-focus circle animation
@@ -54,18 +56,26 @@ kiosk-camera/
 ## Key files
 
 - **`app/build.gradle.kts`** — Upload config as `buildConfigField`: `SCP_HOST`, `SCP_PORT`, `SCP_USER`, `SCP_PATH`, `USE_SCP`, `UPLOAD_URL`, `CERT_PIN`. These are compile-time constants, not user-configurable.
-- **`MainActivity.kt`** — Camera activity. CameraX setup, in-memory capture pipeline with 4-thread save pool, video recording, zoom/flash/timer/night mode, orientation tracking.
-- **`GalleryActivity.kt`** — Queue/Uploaded tabs, thumbnail grid, multi-select with drag, upload FAB with confirmation, FreeKiosk-safe spacers.
+- **`MainActivity.kt`** — Camera activity. CameraX setup, in-memory capture pipeline with 4-thread save pool and MINIMIZE_LATENCY capture mode, video recording, zoom/flash/timer/night mode, orientation tracking, project picker and active project footer.
+- **`GalleryActivity.kt`** — Queue/Uploaded tabs filtered by active project, thumbnail grid, multi-select with drag, upload FAB with confirmation, project FAB to switch projects, active project footer, FreeKiosk-safe spacers.
 - **`ScpUploader.kt`** — Generates 4096-bit RSA keypair on first run (PKCS#8 PEM). Uploads via SSHJ with BouncyCastle provider. 60s connect timeout for intermittent networks.
-- **`UploadManager.kt`** — Coordinates uploads. Copies files to `uploaded_cache/` before deleting from `upload_queue/`. Supports both SCP and HTTPS modes.
+- **`ProjectManager.kt`** — Singleton managing project list and active project. Stored in SharedPreferences (`projects` prefs file) as JSON array. Filesystem-safe names: ASCII-only (letters, numbers, dash, underscore, space, dot), 64 char max, case-insensitive dedup. Active project persisted across restarts.
+- **`ProjectPickerDialog.kt`** — Shared dialog used in both camera and gallery. Card UI with scrollable list, active project highlighting (gold border/check), create dialog with input filter, manage dialog with per-project remove and remove-all.
+- **`UploadManager.kt`** — Coordinates uploads. Upload folder structure: `<base>/<year>/<project>/<timestamp>/01_file.jpg` with sequential numbering (2-digit, auto-widens to 3 for 100+ files). Per-project queue dirs under `upload_queue/<project>/`. Copies files to `uploaded_cache/` before deleting from queue. Supports both SCP and HTTPS modes.
 - **`ZoomableImageView.kt`** — Matrix-based zoom/pan with OverScroller fling momentum. Same approach as GrapheneOS Camera. Integrates with ViewPager2 via `canScrollHorizontally`.
 
 ## Upload flow
 
-1. Photos/videos save to `files/upload_queue/`
-2. User opens gallery → Queue tab → taps upload FAB (or multi-selects + FAB)
-3. `UploadManager` uploads via SCP (or HTTPS), copies to `files/uploaded_cache/`, deletes from queue
+1. Photos/videos save to `files/upload_queue/<project>/`
+2. User opens gallery → Queue tab (filtered by active project) → taps upload FAB (or multi-selects + FAB)
+3. `UploadManager` uploads via SCP to `<base>/<year>/<project>/<timestamp>/` with sequential file numbering (`01_`, `02_`, etc.), copies to `files/uploaded_cache/`, deletes from queue
 4. Uploaded tab shows cached copies (local only, not a server browse)
+
+## Project data
+
+- Project list and active project stored in SharedPreferences (`projects` prefs file)
+- Active project persists across app restarts
+- Gallery queue is per-project (`upload_queue/<project>/`); uploaded cache is shared
 
 ## Known issues
 

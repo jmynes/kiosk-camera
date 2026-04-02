@@ -11,20 +11,22 @@ A reference FreeKiosk configuration is included in `freekiosk-config.json`. Key 
 - **Lock mode** enabled with Device Owner
 - **Return button** at top-right (2 taps, 1500ms timeout)
 
-> **Note:** FreeKiosk's overlay button can overlap the top-right corner of external apps. This app includes layout spacers to keep UI controls clear of the overlay area.
+> **Note:** FreeKiosk's overlay button can overlap the top-right corner of external apps. This app includes layout spacers (64dp) in the gallery top bar to keep UI controls clear of the overlay area.
 
 ## Features
 
 - **Photo capture** with tap-to-focus, pinch-to-zoom, and exposure compensation
-- **Rapid burst capture** — in-memory pipeline with parallel disk saves, no dropped shots
+- **Rapid burst capture** — in-memory pipeline with 4-thread parallel disk saves and MINIMIZE_LATENCY capture mode, no dropped shots
 - **Video recording** with long-press shutter (quick release takes photo instead)
-- **Gallery** with Queue/Uploaded tabs, Google Photos-style multi-select with drag
+- **Project management** — create, remove, and switch between projects; filesystem-safe names (ASCII only, 64 char max, case-insensitive dedup); project picker with card UI and scrollable list
+- **Gallery** with Queue/Uploaded tabs, Google Photos-style multi-select with drag, filtered by active project
+- **Active project** shown in camera footer and gallery footer; project FAB in gallery to switch projects
 - **Media viewer** with carousel swipe, pinch-to-zoom (Matrix-based, GrapheneOS style), and in-app video playback with scrub bar
 - **Flash** (off / auto / on), **Timer** (off / 3s / 10s), **Night mode** (CameraX extension)
 - **Camera flip** (front / back), **Grid overlay**, **Exposure compensation** (double-tap)
 - **Volume buttons** as shutter trigger (tap for photo, hold for video)
 - **Landscape-aware** photo and video orientation via OrientationEventListener
-- **SCP upload** to remote server with auto-generated SSH keypair
+- **SCP upload** to remote server with auto-generated SSH keypair; upload folder structure: `<base>/<year>/<project>/<timestamp>/01_file.jpg` with sequential file numbering (auto-width for 100+ files)
 - **HTTPS upload** alternative with certificate pinning
 - **Upload confirmation dialogs** with one-way transfer warnings
 - **Disk-backed thumbnail cache** for instant gallery loading
@@ -74,7 +76,7 @@ buildConfigField("boolean", "USE_SCP", "true")
 1. Launch the app once — it generates an RSA keypair and logs the public key
 2. Extract the public key: `adb logcat -d | grep "Public key: ssh-rsa"`
 3. Add it to the server: `echo "<key>" | ssh user@server "cat >> ~/.ssh/authorized_keys"`
-4. Photos/videos upload via the gallery's upload button (floating blue FAB)
+4. Create a project in the app, then upload via the gallery's upload button (floating blue FAB). Files are uploaded to `<SCP_PATH>/<year>/<project>/<timestamp>/` with sequential numbering.
 
 ### HTTPS Setup (alternative)
 
