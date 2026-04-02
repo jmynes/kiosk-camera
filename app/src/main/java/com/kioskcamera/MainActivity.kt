@@ -471,7 +471,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val videoFile = File(getQueueDir(), "VID_${timestamp}.mp4")
 
         val outputOptions = FileOutputOptions.Builder(videoFile).build()
@@ -764,25 +764,40 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
+    private val captureQueue = java.util.concurrent.LinkedBlockingQueue<File>()
+    private var isCapturing = false
+
     private fun takePhoto() {
         flashScreen()
         val imageCapture = imageCapture ?: return
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val photoFile = File(getQueueDir(), "IMG_${timestamp}.jpg")
+        captureQueue.add(photoFile)
 
+        if (!isCapturing) {
+            processNextCapture()
+        }
+    }
+
+    private fun processNextCapture() {
+        val imageCapture = imageCapture ?: return
+        val photoFile = captureQueue.poll() ?: run {
+            isCapturing = false
+            return
+        }
+
+        isCapturing = true
         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-
-        captureButton.isEnabled = false
 
         imageCapture.takePicture(outputOptions, cameraExecutor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     Log.i(TAG, "Photo saved: ${photoFile.absolutePath}")
                     handler.post {
-                        showStatus("Photo captured")
-                        captureButton.isEnabled = true
+                        showStatus("Photo captured (${captureQueue.size} pending)")
                         updateGalleryThumbnail()
+                        processNextCapture()
                     }
                 }
 
@@ -790,7 +805,7 @@ class MainActivity : AppCompatActivity() {
                     Log.e(TAG, "Photo capture failed: ${exception.message}")
                     handler.post {
                         showStatus("Capture failed")
-                        captureButton.isEnabled = true
+                        processNextCapture()
                     }
                 }
             }
@@ -806,9 +821,15 @@ class MainActivity : AppCompatActivity() {
             val first = files[0]
             if (first.extension == "jpg") {
                 val bitmap = decodeBitmapWithRotation(first.absolutePath, sampleSize = 8)
+                // Slide-in animation from top
+                galleryButton.translationY = -galleryButton.height.toFloat()
                 galleryButton.setImageBitmap(bitmap)
+                galleryButton.animate()
+                    .translationY(0f)
+                    .setDuration(200)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator())
+                    .start()
             } else {
-                // For video, just show a placeholder color
                 galleryButton.setImageDrawable(null)
                 galleryButton.setBackgroundResource(R.drawable.gallery_button_bg)
             }
