@@ -325,40 +325,11 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun showProjectPicker() {
-        val projects = ProjectManager.getProjects(this)
-        val options = projects.toMutableList()
-        options.add("+ New project")
-
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Select project")
-            .setItems(options.toTypedArray()) { _, which ->
-                if (which == options.size - 1) {
-                    val input = android.widget.EditText(this).apply {
-                        hint = "Project number"
-                        setPadding(48, 32, 48, 32)
-                    }
-                    android.app.AlertDialog.Builder(this)
-                        .setTitle("New project")
-                        .setView(input)
-                        .setPositiveButton("Create") { _, _ ->
-                            val name = input.text.toString().trim()
-                            if (name.isNotEmpty()) {
-                                ProjectManager.addProject(this, name)
-                                ProjectManager.setActiveProject(this, name)
-                                updateProjectFab()
-                                refreshPhotos()
-                            }
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                } else {
-                    ProjectManager.setActiveProject(this, options[which])
-                    updateProjectFab()
-                    refreshPhotos()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        ProjectPickerDialog.show(this) { project ->
+            ProjectManager.setActiveProject(this, project)
+            updateProjectFab()
+            refreshPhotos()
+        }
     }
 
     private fun confirmClearAll() {
