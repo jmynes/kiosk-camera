@@ -192,6 +192,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        activeProject = ProjectManager.getActiveProject(this)
+        updateProjectButton()
         updateGalleryThumbnail()
     }
 
@@ -827,26 +829,35 @@ class MainActivity : AppCompatActivity() {
 
     // --- Gallery Thumbnail ---
 
+    private var lastThumbnailPath: String? = null
+
     private fun updateGalleryThumbnail() {
         val files = getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
             ?.sortedByDescending { it.lastModified() }
         if (files != null && files.isNotEmpty()) {
             val first = files[0]
+            val isNew = first.absolutePath != lastThumbnailPath
+            lastThumbnailPath = first.absolutePath
+
             if (first.extension == "jpg") {
                 val bitmap = decodeBitmapWithRotation(first.absolutePath, sampleSize = 8)
-                // Slide-in animation from top
-                galleryButton.translationY = -galleryButton.height.toFloat()
-                galleryButton.setImageBitmap(bitmap)
-                galleryButton.animate()
-                    .translationY(0f)
-                    .setDuration(200)
-                    .setInterpolator(android.view.animation.DecelerateInterpolator())
-                    .start()
+                if (isNew) {
+                    galleryButton.translationY = -galleryButton.height.toFloat()
+                    galleryButton.setImageBitmap(bitmap)
+                    galleryButton.animate()
+                        .translationY(0f)
+                        .setDuration(200)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator())
+                        .start()
+                } else {
+                    galleryButton.setImageBitmap(bitmap)
+                }
             } else {
                 galleryButton.setImageDrawable(null)
                 galleryButton.setBackgroundResource(R.drawable.gallery_button_bg)
             }
         } else {
+            lastThumbnailPath = null
             galleryButton.setImageDrawable(null)
         }
     }
@@ -909,6 +920,7 @@ class MainActivity : AppCompatActivity() {
             activeProject = project
             ProjectManager.setActiveProject(this, project)
             updateProjectButton()
+            updateGalleryThumbnail()
             showStatus("Project: $project")
         }
     }
