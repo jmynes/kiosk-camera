@@ -26,6 +26,23 @@ object UploadManager {
         return dir
     }
 
+    fun getQueueDirForProject(context: Context, project: String?): File {
+        val sub = project ?: "_unassigned"
+        val dir = File(context.filesDir, "upload_queue/$sub")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    fun getFilesForProject(context: Context, project: String?): List<File> {
+        val dir = getQueueDirForProject(context, project)
+        return dir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
+            ?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    fun getPendingCountForProject(context: Context, project: String?): Int {
+        return getFilesForProject(context, project).size
+    }
+
     fun getUploadedDir(context: Context): File {
         val dir = File(context.filesDir, "uploaded_cache")
         if (!dir.exists()) dir.mkdirs()

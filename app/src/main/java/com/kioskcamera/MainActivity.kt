@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var captureButton: ImageButton
     private lateinit var galleryButton: ImageButton
     private lateinit var projectButton: TextView
+    private lateinit var projectFooter: TextView
     private lateinit var statusText: TextView
     private lateinit var zoomText: TextView
     private lateinit var focusIndicator: FocusIndicatorView
@@ -257,6 +258,7 @@ class MainActivity : AppCompatActivity() {
 
         projectButton = findViewById(R.id.projectButton)
         projectButton.setOnClickListener { showProjectPicker() }
+        projectFooter = findViewById(R.id.projectFooter)
         activeProject = ProjectManager.getActiveProject(this)
         updateProjectButton()
 
@@ -852,7 +854,12 @@ class MainActivity : AppCompatActivity() {
     // --- Queue Directory ---
 
     private fun getQueueDir(): File {
-        val dir = File(filesDir, "upload_queue")
+        val project = activeProject
+        val dir = if (project != null) {
+            File(filesDir, "upload_queue/$project")
+        } else {
+            File(filesDir, "upload_queue/_unassigned")
+        }
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
@@ -888,9 +895,12 @@ class MainActivity : AppCompatActivity() {
         if (project != null) {
             projectButton.text = project
             projectButton.setTextColor(0xFFFFD700.toInt())
+            projectFooter.text = "Project: $project"
+            projectFooter.visibility = View.VISIBLE
         } else {
             projectButton.text = "PRJ"
             projectButton.setTextColor(0xFFFFFFFF.toInt())
+            projectFooter.visibility = View.GONE
         }
     }
 

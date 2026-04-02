@@ -36,6 +36,7 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var titleText: TextView
     private lateinit var uploadButton: ImageButton
     private lateinit var clearAllButton: ImageButton
+    private lateinit var projectFab: TextView
 
     private val selectedPositions = mutableSetOf<Int>()
     private var isSelectionMode = false
@@ -65,9 +66,11 @@ class GalleryActivity : AppCompatActivity() {
         titleText = findViewById(R.id.titleText)
         uploadButton = findViewById(R.id.uploadButton)
         clearAllButton = findViewById(R.id.clearAllButton)
+        projectFab = findViewById(R.id.projectFab)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
         uploadButton.setOnClickListener { onUploadPressed() }
+        projectFab.setOnClickListener { showProjectPicker() }
         clearAllButton.setOnClickListener { confirmClearAll() }
         findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { exitSelectionMode() }
         findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { deleteSelected() }
@@ -81,11 +84,13 @@ class GalleryActivity : AppCompatActivity() {
 
         setupDragSelect()
         updateTabState()
+        updateProjectFab()
         updateEmptyState()
     }
 
     override fun onResume() {
         super.onResume()
+        updateProjectFab()
         refreshPhotos()
     }
 
@@ -230,10 +235,9 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private fun getFiles(): MutableList<File> {
+        val project = ProjectManager.getActiveProject(this)
         return if (showingQueue) {
-            UploadManager.getQueueDir(this).listFiles { f ->
-                f.extension == "jpg" || f.extension == "mp4"
-            }?.sortedByDescending { it.lastModified() }?.toMutableList() ?: mutableListOf()
+            UploadManager.getFilesForProject(this, project).toMutableList()
         } else {
             UploadManager.getUploadedFiles(this).toMutableList()
         }
@@ -258,7 +262,7 @@ class GalleryActivity : AppCompatActivity() {
     private fun onUploadPressed() {
         val project = ProjectManager.getActiveProject(this)
         if (project == null) {
-            Toast.makeText(this, "Set a project in the camera view first", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Select a project first", Toast.LENGTH_LONG).show()
             return
         }
 
@@ -267,9 +271,7 @@ class GalleryActivity : AppCompatActivity() {
             filesToUpload = selectedPositions.sorted().map { adapter.getFile(it) }
             exitSelectionMode()
         } else {
-            filesToUpload = UploadManager.getQueueDir(this).listFiles { f ->
-                f.extension == "jpg" || f.extension == "mp4"
-            }?.toList() ?: emptyList()
+            filesToUpload = UploadManager.getFilesForProject(this, project)
         }
 
         if (filesToUpload.isEmpty()) {
@@ -309,6 +311,54 @@ class GalleryActivity : AppCompatActivity() {
         }
 
         UploadManager.uploadFiles(this, files, project, onProgress, onComplete)
+    }
+
+    private fun updateProjectFab() {
+        val project = ProjectManager.getActiveProject(this)
+        if (project != null) {
+            projectFab.text = project
+            projectFab.setTextColor(0xFFFFD700.toInt())
+        } else {
+            projectFab.text = "PRJ"
+            projectFab.setTextColor(0xFFFFFFFF.toInt())
+        }
+    }
+
+    private fun showProjectPicker() {
+        val projects = ProjectManager.getProjects(this)
+        val options = projects.toMutableList()
+        options.add("+ New project")
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Select project")
+            .setItems(options.toTypedArray()) { _, which ->
+                if (which == options.size - 1) {
+                    val input = android.widget.EditText(this).apply {
+                        hint = "Project number"
+                        setPadding(48, 32, 48, 32)
+                    }
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("New project")
+                        .setView(input)
+                        .setPositiveButton("Create") { _, _ ->
+                            val name = input.text.toString().trim()
+                            if (name.isNotEmpty()) {
+                                ProjectManager.addProject(this, name)
+                                ProjectManager.setActiveProject(this, name)
+                                updateProjectFab()
+                                refreshPhotos()
+                            }
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    ProjectManager.setActiveProject(this, options[which])
+                    updateProjectFab()
+                    refreshPhotos()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun confirmClearAll() {
