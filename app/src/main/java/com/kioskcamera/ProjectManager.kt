@@ -21,13 +21,15 @@ object ProjectManager {
         for (i in 0 until arr.length()) {
             list.add(arr.getString(i))
         }
-        return list.sorted()
+        return list.sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
 
     fun addProject(context: Context, name: String) {
         val projects = getProjects(context).toMutableList()
         val trimmed = name.trim()
-        if (trimmed.isNotEmpty() && trimmed !in projects) {
+        // Case-insensitive dedup — keep the casing of the new entry
+        val existing = projects.find { it.equals(trimmed, ignoreCase = true) }
+        if (trimmed.isNotEmpty() && existing == null) {
             projects.add(trimmed)
             save(context, projects)
         }
