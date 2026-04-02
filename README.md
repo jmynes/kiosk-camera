@@ -10,7 +10,6 @@ A reference FreeKiosk configuration is included in `freekiosk-config.json`. Key 
 - **Multi-app mode** with OpenVPN and Kiosk Camera
 - **Lock mode** enabled with Device Owner
 - **Return button** at top-right (2 taps, 1500ms timeout)
-- **Volume up 5-tap** for admin access
 
 > **Note:** FreeKiosk's overlay button can overlap the top-right corner of external apps. This app includes layout spacers to keep UI controls clear of the overlay area.
 
