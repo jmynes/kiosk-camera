@@ -366,7 +366,7 @@ object ProjectPickerDialog {
 
         val createDialog = AlertDialog.Builder(context)
             .setTitle("New project")
-            .setMessage("Letters, numbers, dashes, underscores, spaces, and dots only.")
+            .setMessage("Start with the project number, and a brief label you'll recognize on the server from your computer.\n\nLetters, numbers, dashes, underscores, spaces, and dots only.")
             .setView(container)
             .setPositiveButton("Create") { _, _ ->
                 val name = sanitizeProjectName(input.text.toString())
