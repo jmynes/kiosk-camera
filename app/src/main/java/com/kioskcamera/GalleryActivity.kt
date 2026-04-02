@@ -315,12 +315,16 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun updateProjectFab() {
         val project = ProjectManager.getActiveProject(this)
+        val footer = findViewById<TextView>(R.id.projectFooter)
         if (project != null) {
             projectFab.text = project
             projectFab.setTextColor(0xFFFFD700.toInt())
+            footer.text = "Project: $project"
+            footer.visibility = View.VISIBLE
         } else {
             projectFab.text = "PRJ"
             projectFab.setTextColor(0xFFFFFFFF.toInt())
+            footer.visibility = View.GONE
         }
     }
 

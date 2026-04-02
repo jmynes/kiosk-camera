@@ -166,6 +166,19 @@
             android:elevation="6dp"
             android:contentDescription="Upload all" />
 
+        <!-- Project footer -->
+        <TextView
+            android:id="@+id/projectFooter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:gravity="center"
+            android:paddingVertical="6dp"
+            android:background="#80000000"
+            android:textColor="#FFD700"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
     </FrameLayout>
 
 </LinearLayout>
