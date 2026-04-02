@@ -195,7 +195,11 @@ object ProjectPickerDialog {
             .setTitle("Manage projects")
             .setView(layout)
             .setPositiveButton("Done") { _, _ ->
-                show(context, onProjectSelected)
+                if (ProjectManager.getProjects(context).isEmpty()) {
+                    showCreateDialog(context, onProjectSelected)
+                } else {
+                    show(context, onProjectSelected)
+                }
             }
             .setNeutralButton("Remove all") { _, _ ->
                 AlertDialog.Builder(context)
@@ -204,7 +208,7 @@ object ProjectPickerDialog {
                         val allProjects = ProjectManager.getProjects(context)
                         allProjects.forEach { ProjectManager.removeProject(context, it) }
                         ProjectManager.setActiveProject(context, null)
-                        show(context, onProjectSelected)
+                        showCreateDialog(context, onProjectSelected)
                     }
                     .setNegativeButton("Cancel", null)
                     .show()
@@ -214,6 +218,15 @@ object ProjectPickerDialog {
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(0xFF81C784.toInt())
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(0xFFFF6B6B.toInt())
+        }
+
+        fun updateRemoveAllVisibility() {
+            val btn = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            if (ProjectManager.getProjects(context).isEmpty()) {
+                btn?.visibility = View.GONE
+            } else {
+                btn?.visibility = View.VISIBLE
+            }
         }
 
         fun rebuildList() {
@@ -292,6 +305,11 @@ object ProjectPickerDialog {
                                         ProjectManager.setActiveProject(context, null)
                                     }
                                     rebuildList()
+                                    updateRemoveAllVisibility()
+                                    if (ProjectManager.getProjects(context).isEmpty()) {
+                                        dialog.dismiss()
+                                        showCreateDialog(context, onProjectSelected)
+                                    }
                                 }
                                 .setNegativeButton("Cancel", null)
                                 .show()
@@ -306,6 +324,7 @@ object ProjectPickerDialog {
 
         rebuildList()
         dialog.show()
+        updateRemoveAllVisibility()
     }
 
     private const val MAX_PROJECT_NAME_LENGTH = 64
