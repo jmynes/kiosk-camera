@@ -31,13 +31,20 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var normalBar: View
     private lateinit var selectionBar: View
     private lateinit var selectionCount: TextView
+    private lateinit var tabQueue: TextView
+    private lateinit var tabUploaded: TextView
+    private lateinit var titleText: TextView
+    private lateinit var uploadButton: ImageButton
+    private lateinit var clearAllButton: ImageButton
 
     private val selectedPositions = mutableSetOf<Int>()
     private var isSelectionMode = false
     private var isDragSelecting = false
     private var dragStartPos = -1
     private var dragCurrentPos = -1
-    private var dragAddMode = true // true = selecting, false = deselecting
+    private var dragAddMode = true
+
+    private var showingQueue = true // true = queue tab, false = uploaded tab
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ThumbnailCache.init(cacheDir)
@@ -53,24 +60,53 @@ class GalleryActivity : AppCompatActivity() {
         normalBar = findViewById(R.id.normalBar)
         selectionBar = findViewById(R.id.selectionBar)
         selectionCount = findViewById(R.id.selectionCount)
+        tabQueue = findViewById(R.id.tabQueue)
+        tabUploaded = findViewById(R.id.tabUploaded)
+        titleText = findViewById(R.id.titleText)
+        uploadButton = findViewById(R.id.uploadButton)
+        clearAllButton = findViewById(R.id.clearAllButton)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-        findViewById<ImageButton>(R.id.uploadButton).setOnClickListener { uploadAll() }
-        findViewById<ImageButton>(R.id.clearAllButton).setOnClickListener { confirmClearAll() }
+        uploadButton.setOnClickListener { uploadAll() }
+        clearAllButton.setOnClickListener { confirmClearAll() }
         findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { exitSelectionMode() }
         findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { deleteSelected() }
 
+        tabQueue.setOnClickListener { switchTab(true) }
+        tabUploaded.setOnClickListener { switchTab(false) }
+
         recyclerView.layoutManager = GridLayoutManager(this, 3)
-        adapter = PhotoAdapter(getPhotos())
+        adapter = PhotoAdapter(getFiles())
         recyclerView.adapter = adapter
 
         setupDragSelect()
+        updateTabState()
         updateEmptyState()
     }
 
     override fun onResume() {
         super.onResume()
         refreshPhotos()
+    }
+
+    private fun switchTab(queue: Boolean) {
+        if (showingQueue == queue) return
+        if (isSelectionMode) exitSelectionMode()
+        showingQueue = queue
+        updateTabState()
+        refreshPhotos()
+    }
+
+    private fun updateTabState() {
+        tabQueue.setTextColor(if (showingQueue) 0xFFFFD700.toInt() else 0xFF888888.toInt())
+        tabQueue.setTypeface(null, if (showingQueue) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        tabUploaded.setTextColor(if (!showingQueue) 0xFFFFD700.toInt() else 0xFF888888.toInt())
+        tabUploaded.setTypeface(null, if (!showingQueue) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+
+        titleText.text = if (showingQueue) "Queue" else "Uploaded"
+
+        // Show upload button only on queue tab, clear all on both
+        uploadButton.visibility = if (showingQueue) View.VISIBLE else View.GONE
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -186,23 +222,23 @@ class GalleryActivity : AppCompatActivity() {
     private fun openViewer(file: File) {
         val intent = Intent(this, PhotoViewerActivity::class.java)
         intent.putExtra("photo_path", file.absolutePath)
+        // Tell viewer which directory to scan
+        intent.putExtra("source_dir", if (showingQueue) "queue" else "uploaded")
         startActivity(intent)
     }
 
-    private fun getQueueDir(): File {
-        val dir = File(filesDir, "upload_queue")
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
-
-    private fun getPhotos(): MutableList<File> {
-        return getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
-            ?.sortedByDescending { it.lastModified() }
-            ?.toMutableList() ?: mutableListOf()
+    private fun getFiles(): MutableList<File> {
+        return if (showingQueue) {
+            UploadManager.getQueueDir(this).listFiles { f ->
+                f.extension == "jpg" || f.extension == "mp4"
+            }?.sortedByDescending { it.lastModified() }?.toMutableList() ?: mutableListOf()
+        } else {
+            UploadManager.getUploadedFiles(this).toMutableList()
+        }
     }
 
     private fun refreshPhotos() {
-        adapter.updatePhotos(getPhotos())
+        adapter.updatePhotos(getFiles())
         updateEmptyState()
     }
 
@@ -210,6 +246,7 @@ class GalleryActivity : AppCompatActivity() {
         if (adapter.itemCount == 0) {
             emptyText.visibility = View.VISIBLE
             recyclerView.visibility = View.GONE
+            emptyText.text = if (showingQueue) "No media queued" else "No uploaded media"
         } else {
             emptyText.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
@@ -223,7 +260,6 @@ class GalleryActivity : AppCompatActivity() {
             return
         }
 
-        val uploadButton = findViewById<ImageButton>(R.id.uploadButton)
         uploadButton.isEnabled = false
         uploadButton.alpha = 0.5f
         Toast.makeText(this, "Uploading $count file(s)...", Toast.LENGTH_SHORT).show()
@@ -231,15 +267,13 @@ class GalleryActivity : AppCompatActivity() {
         val mainHandler = Handler(Looper.getMainLooper())
         UploadManager.uploadAll(this,
             onProgress = { msg ->
-                mainHandler.post {
-                    findViewById<TextView>(R.id.titleText).text = msg
-                }
+                mainHandler.post { titleText.text = msg }
             },
             onComplete = { uploaded, failed ->
                 mainHandler.post {
                     uploadButton.isEnabled = true
                     uploadButton.alpha = 1f
-                    findViewById<TextView>(R.id.titleText).text = "Queued Media"
+                    updateTabState()
                     val msg = if (failed == 0) "Uploaded $uploaded file(s)"
                               else "Uploaded $uploaded, failed $failed"
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
@@ -253,11 +287,16 @@ class GalleryActivity : AppCompatActivity() {
         val count = adapter.itemCount
         if (count == 0) return
 
+        val what = if (showingQueue) "queued" else "uploaded cache"
         AlertDialog.Builder(this)
             .setTitle("Delete all $count items?")
-            .setMessage("This will remove all queued photos and videos.")
+            .setMessage("This will remove all $what photos and videos.")
             .setPositiveButton("Delete All") { _, _ ->
-                getQueueDir().listFiles()?.forEach { it.delete() }
+                if (showingQueue) {
+                    UploadManager.getQueueDir(this).listFiles()?.forEach { it.delete() }
+                } else {
+                    UploadManager.clearUploadedCache(this)
+                }
                 ThumbnailCache.clearAll()
                 refreshPhotos()
             }

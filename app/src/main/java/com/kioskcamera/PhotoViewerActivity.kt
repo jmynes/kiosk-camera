@@ -86,7 +86,12 @@ class PhotoViewerActivity : AppCompatActivity() {
     }
 
     private fun loadMedia(startPath: String) {
-        val queueDir = File(filesDir, "upload_queue")
+        val sourceDir = intent.getStringExtra("source_dir") ?: "queue"
+        val queueDir = if (sourceDir == "uploaded") {
+            UploadManager.getUploadedDir(this)
+        } else {
+            UploadManager.getQueueDir(this)
+        }
         mediaFiles = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
             ?.sortedByDescending { it.lastModified() }
             ?.toMutableList() ?: mutableListOf()

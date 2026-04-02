@@ -6,7 +6,6 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.Executors
 
 object UploadManager {
@@ -25,15 +24,32 @@ object UploadManager {
         return dir
     }
 
+    fun getUploadedDir(context: Context): File {
+        val dir = File(context.filesDir, "uploaded_cache")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
     fun getPendingCount(context: Context): Int {
         return getQueueDir(context).listFiles { f ->
             f.extension == "jpg" || f.extension == "mp4"
         }?.size ?: 0
     }
 
+    fun getUploadedFiles(context: Context): List<File> {
+        return getUploadedDir(context).listFiles { f ->
+            f.extension == "jpg" || f.extension == "mp4"
+        }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    fun clearUploadedCache(context: Context) {
+        getUploadedDir(context).listFiles()?.forEach { it.delete() }
+    }
+
     fun uploadAll(context: Context, onProgress: (String) -> Unit, onComplete: (Int, Int) -> Unit) {
         executor.execute {
             val queueDir = getQueueDir(context)
+            val uploadedDir = getUploadedDir(context)
             val files = queueDir.listFiles { f ->
                 f.extension == "jpg" || f.extension == "mp4"
             }?.sortedBy { it.lastModified() } ?: emptyList()
@@ -44,15 +60,18 @@ object UploadManager {
             for (file in files) {
                 onProgress("Uploading ${file.name}...")
                 if (uploadFile(file)) {
+                    // Move to uploaded cache
+                    val cached = File(uploadedDir, file.name)
+                    file.copyTo(cached, overwrite = true)
                     file.delete()
                     uploaded++
-                    Log.i(TAG, "Uploaded and deleted: ${file.name}")
+                    Log.i(TAG, "Uploaded and cached: ${file.name}")
                     onProgress("Uploaded ${file.name}")
                 } else {
                     failed++
                     Log.w(TAG, "Upload failed for ${file.name}")
                     onProgress("Failed: ${file.name}")
-                    break // Stop on first failure
+                    break
                 }
             }
 
