@@ -15,7 +15,7 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "UPLOAD_URL", "\"https://10.99.88.108:8443/upload\"")
-        buildConfigField("String", "CERT_PIN", "\"sha256/+tUcWyunJuT8RAAS/lyZPUPthJZz/wIwDDeqPzMjCZU=\"")
+        buildConfigField("String", "CERT_PIN", "\"sha256/mBpAW6OasLSk0pf4ab+MNc+IWn2U1rcq5RHES7zMwo0=\"")
         buildConfigField("String", "SCP_HOST", "\"10.99.88.108\"")
         buildConfigField("int", "SCP_PORT", "22")
         buildConfigField("String", "SCP_USER", "\"sysadm\"")
