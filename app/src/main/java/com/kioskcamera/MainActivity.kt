@@ -174,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
         httpClient = createHttpClient()
         ScpUploader.init(this)
+        initSounds()
 
         setupZoomGesture()
         setupControls()
@@ -475,7 +476,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startRecording() {
-        shutterSound.play(android.media.MediaActionSound.START_VIDEO_RECORDING)
+        playShutter()
         val vc = videoCapture ?: return
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -550,7 +551,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopRecording() {
-        shutterSound.play(android.media.MediaActionSound.STOP_VIDEO_RECORDING)
+        playShutter()
         activeRecording?.stop()
         activeRecording = null
     }
@@ -780,14 +781,29 @@ class MainActivity : AppCompatActivity() {
 
     private val saveExecutor = Executors.newFixedThreadPool(4)
     private var captureCount = java.util.concurrent.atomic.AtomicInteger(0)
-    private val shutterSound = android.media.MediaActionSound().apply {
-        load(android.media.MediaActionSound.SHUTTER_CLICK)
-        load(android.media.MediaActionSound.START_VIDEO_RECORDING)
-        load(android.media.MediaActionSound.STOP_VIDEO_RECORDING)
+    private lateinit var soundPool: android.media.SoundPool
+    private var shutterSoundId = 0
+    private var videoStartSoundId = 0
+    private var videoStopSoundId = 0
+
+    private fun initSounds() {
+        val attrs = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = android.media.SoundPool.Builder()
+            .setMaxStreams(3)
+            .setAudioAttributes(attrs)
+            .build()
+        shutterSoundId = soundPool.load(this, R.raw.shutter_click, 1)
+    }
+
+    private fun playShutter() {
+        soundPool.play(shutterSoundId, 1f, 1f, 1, 0, 1f)
     }
 
     private fun takePhoto() {
-        shutterSound.play(android.media.MediaActionSound.SHUTTER_CLICK)
+        playShutter()
         flashScreen()
         val imageCapture = imageCapture ?: return
 
