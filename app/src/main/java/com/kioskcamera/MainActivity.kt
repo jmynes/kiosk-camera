@@ -707,7 +707,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         imageCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .setFlashMode(flashMode)
             .build()
 
@@ -764,8 +764,8 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-    private val captureQueue = java.util.concurrent.LinkedBlockingQueue<File>()
-    private var isCapturing = false
+    private val saveExecutor = Executors.newFixedThreadPool(4)
+    private var captureCount = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun takePhoto() {
         flashScreen()
@@ -773,40 +773,45 @@ class MainActivity : AppCompatActivity() {
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val photoFile = File(getQueueDir(), "IMG_${timestamp}.jpg")
-        captureQueue.add(photoFile)
 
-        if (!isCapturing) {
-            processNextCapture()
-        }
-    }
+        captureCount.incrementAndGet()
 
-    private fun processNextCapture() {
-        val imageCapture = imageCapture ?: return
-        val photoFile = captureQueue.poll() ?: run {
-            isCapturing = false
-            return
-        }
+        imageCapture.takePicture(cameraExecutor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                    // Save on separate thread pool so CameraX can capture next immediately
+                    saveExecutor.execute {
+                        try {
+                            val buffer = image.planes[0].buffer
+                            val bytes = ByteArray(buffer.remaining())
+                            buffer.get(bytes)
+                            image.close()
 
-        isCapturing = true
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+                            photoFile.writeBytes(bytes)
+                            Log.i(TAG, "Photo saved: ${photoFile.absolutePath}")
 
-        imageCapture.takePicture(outputOptions, cameraExecutor,
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    Log.i(TAG, "Photo saved: ${photoFile.absolutePath}")
-                    handler.post {
-                        showStatus("Photo captured (${captureQueue.size} pending)")
-                        updateGalleryThumbnail()
-                        processNextCapture()
+                            val remaining = captureCount.decrementAndGet()
+                            handler.post {
+                                if (remaining > 0) {
+                                    showStatus("Photo captured ($remaining saving)")
+                                } else {
+                                    showStatus("Photo captured")
+                                }
+                                updateGalleryThumbnail()
+                            }
+                        } catch (e: Exception) {
+                            image.close()
+                            Log.e(TAG, "Photo save failed: ${e.message}")
+                            captureCount.decrementAndGet()
+                            handler.post { showStatus("Save failed") }
+                        }
                     }
                 }
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "Photo capture failed: ${exception.message}")
-                    handler.post {
-                        showStatus("Capture failed")
-                        processNextCapture()
-                    }
+                    captureCount.decrementAndGet()
+                    handler.post { showStatus("Capture failed") }
                 }
             }
         )
@@ -940,6 +945,7 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(timerUpdateRunnable)
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
+        saveExecutor.shutdown()
         super.onDestroy()
     }
 }
