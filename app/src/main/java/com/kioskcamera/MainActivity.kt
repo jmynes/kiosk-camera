@@ -896,35 +896,151 @@ class MainActivity : AppCompatActivity() {
 
     private fun showProjectPicker() {
         val projects = ProjectManager.getProjects(this)
-        val options = mutableListOf<String>()
-        if (activeProject != null) {
-            options.add("Clear project")
-        }
-        options.addAll(projects)
-        options.add("+ New project")
+        val dp = { px: Int -> (px * resources.displayMetrics.density).toInt() }
 
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Select project")
-            .setItems(options.toTypedArray()) { _, which ->
-                when {
-                    activeProject != null && which == 0 -> {
-                        activeProject = null
-                        ProjectManager.setActiveProject(this@MainActivity, null)
-                        updateProjectButton()
-                        showStatus("Project cleared")
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setView(layout)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        // Project items as cards
+        if (projects.isEmpty()) {
+            val empty = TextView(this).apply {
+                text = "No projects yet — create one below"
+                textSize = 14f
+                setTextColor(0xFF888888.toInt())
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                gravity = android.view.Gravity.CENTER
+            }
+            layout.addView(empty)
+        } else {
+            val scrollView = android.widget.ScrollView(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            val listLayout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+            }
+
+            for (project in projects) {
+                val isActive = project == activeProject
+                val card = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(dp(16), dp(14), dp(16), dp(14))
+                    val lp = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    lp.bottomMargin = dp(4)
+                    layoutParams = lp
+
+                    val bg = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(8).toFloat()
+                        if (isActive) {
+                            setColor(0xFF2A2A1A.toInt())
+                            setStroke(dp(2), 0xFFFFD700.toInt())
+                        } else {
+                            setColor(0xFF1E1E1E.toInt())
+                            setStroke(dp(1), 0xFF333333.toInt())
+                        }
                     }
-                    which == options.size - 1 -> showCreateProject()
-                    else -> {
-                        val offset = if (activeProject != null) 1 else 0
-                        activeProject = projects[which - offset]
-                        ProjectManager.setActiveProject(this@MainActivity, activeProject)
+                    background = bg
+                    isClickable = true
+
+                    setOnClickListener {
+                        activeProject = project
+                        ProjectManager.setActiveProject(this@MainActivity, project)
                         updateProjectButton()
-                        showStatus("Project: $activeProject")
+                        showStatus("Project: $project")
+                        dialog.dismiss()
                     }
                 }
+
+                // Folder icon
+                val icon = TextView(this).apply {
+                    text = "\uD83D\uDCC1"  // folder emoji
+                    textSize = 20f
+                    setPadding(0, 0, dp(12), 0)
+                }
+                card.addView(icon)
+
+                // Project name
+                val name = TextView(this).apply {
+                    text = project
+                    textSize = 17f
+                    setTextColor(if (isActive) 0xFFFFD700.toInt() else 0xFFFFFFFF.toInt())
+                    if (isActive) setTypeface(null, android.graphics.Typeface.BOLD)
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                card.addView(name)
+
+                // Active indicator
+                if (isActive) {
+                    val check = TextView(this).apply {
+                        text = "✓"
+                        textSize = 18f
+                        setTextColor(0xFFFFD700.toInt())
+                    }
+                    card.addView(check)
+                }
+
+                listLayout.addView(card)
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+
+            scrollView.addView(listLayout)
+            layout.addView(scrollView)
+        }
+
+        // Spacer
+        val spacer = View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, dp(12)
+            )
+        }
+        layout.addView(spacer)
+
+        // Create new button — visually distinct
+        val createBtn = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            val bg = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(0xFF448AFF.toInt())
+            }
+            background = bg
+            isClickable = true
+            setOnClickListener {
+                dialog.dismiss()
+                showCreateProject()
+            }
+        }
+        val plusIcon = TextView(this).apply {
+            text = "＋"
+            textSize = 18f
+            setTextColor(0xFFFFFFFF.toInt())
+            setPadding(0, 0, dp(8), 0)
+        }
+        createBtn.addView(plusIcon)
+        val createText = TextView(this).apply {
+            text = "Create new project"
+            textSize = 16f
+            setTextColor(0xFFFFFFFF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        createBtn.addView(createText)
+        layout.addView(createBtn)
+
+        dialog.show()
     }
 
     private fun showCreateProject() {
