@@ -55,6 +55,16 @@
         android:padding="12dp"
         android:background="#60000000">
 
+        <!-- Camera switch -->
+        <ImageButton
+            android:id="@+id/switchCameraButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_flip_camera"
+            android:scaleType="centerInside"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Switch camera" />
+
         <!-- Flash toggle -->
         <ImageButton
             android:id="@+id/flashButton"
@@ -62,6 +72,7 @@
             android:layout_height="40dp"
             android:src="@drawable/ic_flash_off"
             android:scaleType="centerInside"
+            android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Flash" />
 
@@ -91,16 +102,6 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_weight="1" />
-
-        <!-- Camera switch -->
-        <ImageButton
-            android:id="@+id/switchCameraButton"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/ic_flip_camera"
-            android:scaleType="centerInside"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Switch camera" />
     </LinearLayout>
 
     <!-- Exposure compensation slider (vertical, right side) -->
