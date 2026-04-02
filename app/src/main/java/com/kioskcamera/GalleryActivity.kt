@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.MotionEvent
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -68,15 +69,16 @@ class GalleryActivity : AppCompatActivity() {
         clearAllButton = findViewById(R.id.clearAllButton)
         projectFab = findViewById(R.id.projectFab)
 
-        findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-        uploadButton.setOnClickListener { onUploadPressed() }
-        projectFab.setOnClickListener { showProjectPicker() }
-        clearAllButton.setOnClickListener { confirmClearAll() }
-        findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { exitSelectionMode() }
-        findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { deleteSelected() }
+        val haptic = { v: View -> v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
+        findViewById<ImageButton>(R.id.backButton).setOnClickListener { haptic(it); finish() }
+        uploadButton.setOnClickListener { haptic(it); onUploadPressed() }
+        projectFab.setOnClickListener { haptic(it); showProjectPicker() }
+        clearAllButton.setOnClickListener { haptic(it); confirmClearAll() }
+        findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { haptic(it); exitSelectionMode() }
+        findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { haptic(it); deleteSelected() }
 
-        tabQueue.setOnClickListener { switchTab(true) }
-        tabUploaded.setOnClickListener { switchTab(false) }
+        tabQueue.setOnClickListener { haptic(it); switchTab(true) }
+        tabUploaded.setOnClickListener { haptic(it); switchTab(false) }
 
         val gridLayoutManager = GridLayoutManager(this, 3)
         gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
@@ -486,9 +488,11 @@ class GalleryActivity : AppCompatActivity() {
                     )
 
                     h.itemView.setOnClickListener {
+                        it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         onItemTap(h.bindingAdapterPosition)
                     }
                     h.itemView.setOnLongClickListener {
+                        it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onItemLongPress(h.bindingAdapterPosition)
                         true
                     }

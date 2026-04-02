@@ -17,6 +17,7 @@ import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
@@ -255,22 +256,23 @@ class MainActivity : AppCompatActivity() {
             true
         }
         galleryButton.setOnClickListener {
+            haptic(it)
             startActivity(Intent(this, GalleryActivity::class.java))
         }
 
         projectButton = findViewById(R.id.projectButton)
-        projectButton.setOnClickListener { showProjectPicker() }
+        projectButton.setOnClickListener { haptic(it); showProjectPicker() }
         projectFooter = findViewById(R.id.projectFooter)
         activeProject = ProjectManager.getActiveProject(this)
         updateProjectButton()
 
-        flashButton.setOnClickListener { cycleFlash() }
-        hdrButton.setOnClickListener { toggleHdr() }
-        timerButton.setOnClickListener { cycleTimer() }
-        switchCameraButton.setOnClickListener { switchCamera() }
+        flashButton.setOnClickListener { haptic(it); cycleFlash() }
+        hdrButton.setOnClickListener { haptic(it); toggleHdr() }
+        timerButton.setOnClickListener { haptic(it); cycleTimer() }
+        switchCameraButton.setOnClickListener { haptic(it); switchCamera() }
 
-        photoModeButton.setOnClickListener { setMode(false) }
-        videoModeButton.setOnClickListener { setMode(true) }
+        photoModeButton.setOnClickListener { haptic(it); setMode(false) }
+        videoModeButton.setOnClickListener { haptic(it); setMode(true) }
 
         flashButton.tooltipText = "Flash"
         hdrButton.tooltipText = "Night mode"
@@ -875,7 +877,12 @@ class MainActivity : AppCompatActivity() {
         return dir
     }
 
+    private fun haptic(view: View) {
+        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+    }
+
     private fun pulseButton(view: View) {
+        haptic(view)
         val scaleDown = AnimatorSet().apply {
             playTogether(
                 ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.85f),

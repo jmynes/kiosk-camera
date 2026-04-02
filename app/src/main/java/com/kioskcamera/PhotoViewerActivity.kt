@@ -56,9 +56,9 @@ class PhotoViewerActivity : AppCompatActivity() {
         videoSeekBar = findViewById(R.id.videoSeekBar)
         videoTimeText = findViewById(R.id.videoTimeText)
         floatingPlayPause = findViewById(R.id.floatingPlayPause)
-        floatingPlayPause.setOnClickListener { toggleCurrentVideo() }
+        floatingPlayPause.setOnClickListener { it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY); toggleCurrentVideo() }
         floatingMute = findViewById(R.id.floatingMute)
-        floatingMute.setOnClickListener { toggleMute() }
+        floatingMute.setOnClickListener { it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY); toggleMute() }
         topBar = findViewById(R.id.topBar)
         bottomContainer = findViewById(R.id.bottomContainer)
 
@@ -286,8 +286,8 @@ class PhotoViewerActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-        findViewById<ImageButton>(R.id.deleteButtonTop).setOnClickListener { confirmDelete() }
+        findViewById<ImageButton>(R.id.backButton).setOnClickListener { it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY); finish() }
+        findViewById<ImageButton>(R.id.deleteButtonTop).setOnClickListener { it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY); confirmDelete() }
     }
 
     private fun confirmDelete() {
