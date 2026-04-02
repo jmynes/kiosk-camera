@@ -33,23 +33,59 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Check APKs
-MISSING_APKS=false
+# Check and build/download APKs
 if [ ! -f "$FREEKIOSK_APK" ]; then
     echo "WARNING: FreeKiosk APK not found: $FREEKIOSK_APK"
     echo "  Set FREEKIOSK_APK env var to the correct path"
-    MISSING_APKS=true
+    echo "  Download from: https://github.com/RushB-fr/freekiosk/releases"
+    echo ""
+    read -p "Continue without FreeKiosk APK? (y/N) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
 fi
+
 if [ ! -f "$KIOSKCAMERA_APK" ]; then
-    echo "WARNING: Kiosk Camera APK not found: $KIOSKCAMERA_APK"
-    echo "  Build with: cd $SCRIPT_DIR && ./gradlew assembleDebug"
-    MISSING_APKS=true
+    echo "Kiosk Camera APK not found, building..."
+    if [ -f "$SCRIPT_DIR/gradlew" ]; then
+        export ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
+        export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
+        (cd "$SCRIPT_DIR" && ./gradlew assembleDebug)
+        if [ -f "$KIOSKCAMERA_APK" ]; then
+            echo "  Built successfully."
+        else
+            echo "  Build failed. Check ANDROID_HOME and JAVA_HOME."
+        fi
+    else
+        echo "  WARNING: Not in kiosk-camera repo, can't build."
+    fi
 fi
+
 if [ ! -f "$OPENVPN_APK" ]; then
-    echo "WARNING: OpenVPN APK not found: $OPENVPN_APK"
-    echo "  Set OPENVPN_APK env var to the correct path"
-    MISSING_APKS=true
+    echo "OpenVPN APK not found, downloading from F-Droid..."
+    OPENVPN_FDROID_URL="https://f-droid.org/repo/de.blinkt.openvpn_219.apk"
+    if wget -q --show-progress -O "$OPENVPN_APK" "$OPENVPN_FDROID_URL" 2>/dev/null || \
+       curl -fSL -o "$OPENVPN_APK" "$OPENVPN_FDROID_URL" 2>/dev/null; then
+        echo "  Downloaded: $OPENVPN_APK"
+    else
+        echo "  WARNING: Download failed. Install OpenVPN manually."
+        rm -f "$OPENVPN_APK"
+    fi
 fi
+
+# Final APK check
+MISSING_APKS=false
+for apk_name in "FreeKiosk:$FREEKIOSK_APK" "Kiosk Camera:$KIOSKCAMERA_APK" "OpenVPN:$OPENVPN_APK"; do
+    name="${apk_name%%:*}"
+    path="${apk_name#*:}"
+    if [ -f "$path" ]; then
+        echo "  ✓ $name: $(basename "$path")"
+    else
+        echo "  ✗ $name: missing"
+        MISSING_APKS=true
+    fi
+done
 
 if [ "$MISSING_APKS" = true ]; then
     echo ""
