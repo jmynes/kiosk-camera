@@ -46,6 +46,34 @@ object UploadManager {
         getUploadedDir(context).listFiles()?.forEach { it.delete() }
     }
 
+    fun uploadFiles(context: Context, files: List<File>, onProgress: (String) -> Unit, onComplete: (Int, Int) -> Unit) {
+        executor.execute {
+            val uploadedDir = getUploadedDir(context)
+            var uploaded = 0
+            var failed = 0
+
+            for (file in files) {
+                if (!file.exists()) continue
+                onProgress("Uploading ${file.name}...")
+                if (uploadFile(file)) {
+                    val cached = File(uploadedDir, file.name)
+                    file.copyTo(cached, overwrite = true)
+                    file.delete()
+                    uploaded++
+                    Log.i(TAG, "Uploaded and cached: ${file.name}")
+                    onProgress("Uploaded ${file.name}")
+                } else {
+                    failed++
+                    Log.w(TAG, "Upload failed for ${file.name}")
+                    onProgress("Failed: ${file.name}")
+                    break
+                }
+            }
+
+            onComplete(uploaded, failed)
+        }
+    }
+
     fun uploadAll(context: Context, onProgress: (String) -> Unit, onComplete: (Int, Int) -> Unit) {
         executor.execute {
             val queueDir = getQueueDir(context)

@@ -105,7 +105,7 @@ class GalleryActivity : AppCompatActivity() {
 
         titleText.text = if (showingQueue) "Queue" else "Uploaded"
 
-        // Show upload button only on queue tab, clear all on both
+        // Show upload FAB only on queue tab
         uploadButton.visibility = if (showingQueue) View.VISIBLE else View.GONE
     }
 
