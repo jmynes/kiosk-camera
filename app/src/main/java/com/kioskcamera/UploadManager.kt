@@ -149,7 +149,7 @@ object UploadManager {
         val basePath = BuildConfig.SCP_PATH.trimEnd('/')
         val year = SimpleDateFormat("yyyy", Locale.US).format(Date())
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        return "$basePath/$projectNumber/$year/$timestamp"
+        return "$basePath/$year/$projectNumber/$timestamp"
     }
 
     private fun uploadFileHttp(file: File): Boolean {
