@@ -67,7 +67,7 @@ class GalleryActivity : AppCompatActivity() {
         clearAllButton = findViewById(R.id.clearAllButton)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
-        uploadButton.setOnClickListener { uploadAll() }
+        uploadButton.setOnClickListener { onUploadPressed() }
         clearAllButton.setOnClickListener { confirmClearAll() }
         findViewById<ImageButton>(R.id.cancelSelectionButton).setOnClickListener { exitSelectionMode() }
         findViewById<ImageButton>(R.id.deleteSelectedButton).setOnClickListener { deleteSelected() }
@@ -207,8 +207,10 @@ class GalleryActivity : AppCompatActivity() {
         val count = selectedPositions.size
         if (count == 0) return
 
+        val message = if (!showingQueue) "This only deletes the local cache. To delete from the server, use a computer." else null
         AlertDialog.Builder(this)
             .setTitle("Delete $count item${if (count > 1) "s" else ""}?")
+            .apply { if (message != null) setMessage(message) }
             .setPositiveButton("Delete") { _, _ ->
                 val files = selectedPositions.sortedDescending().map { adapter.getFile(it) }
                 files.forEach { it.delete() }
@@ -253,44 +255,75 @@ class GalleryActivity : AppCompatActivity() {
         }
     }
 
-    private fun uploadAll() {
-        val count = UploadManager.getPendingCount(this)
-        if (count == 0) {
-            Toast.makeText(this, "Nothing to upload", Toast.LENGTH_SHORT).show()
-            return
+    private fun onUploadPressed() {
+        if (isSelectionMode && selectedPositions.isNotEmpty()) {
+            val count = selectedPositions.size
+            AlertDialog.Builder(this)
+                .setTitle("Upload $count item${if (count > 1) "s" else ""}?")
+                .setMessage("Uploads are one-way. To delete from the server, use a computer.")
+                .setPositiveButton("Upload") { _, _ ->
+                    val files = selectedPositions.sorted().map { adapter.getFile(it) }
+                    exitSelectionMode()
+                    doUpload(files)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            val count = UploadManager.getPendingCount(this)
+            if (count == 0) {
+                Toast.makeText(this, "Nothing to upload", Toast.LENGTH_SHORT).show()
+                return
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Upload all $count item${if (count > 1) "s" else ""}?")
+                .setMessage("Uploads are one-way. To delete from the server, use a computer.")
+                .setPositiveButton("Upload") { _, _ ->
+                    doUpload(null)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         }
+    }
 
+    private fun doUpload(files: List<File>?) {
         uploadButton.isEnabled = false
         uploadButton.alpha = 0.5f
-        Toast.makeText(this, "Uploading $count file(s)...", Toast.LENGTH_SHORT).show()
 
         val mainHandler = Handler(Looper.getMainLooper())
-        UploadManager.uploadAll(this,
-            onProgress = { msg ->
-                mainHandler.post { titleText.text = msg }
-            },
-            onComplete = { uploaded, failed ->
-                mainHandler.post {
-                    uploadButton.isEnabled = true
-                    uploadButton.alpha = 1f
-                    updateTabState()
-                    val msg = if (failed == 0) "Uploaded $uploaded file(s)"
-                              else "Uploaded $uploaded, failed $failed"
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                    refreshPhotos()
-                }
+        val onProgress: (String) -> Unit = { msg ->
+            mainHandler.post { titleText.text = msg }
+        }
+        val onComplete: (Int, Int) -> Unit = { uploaded, failed ->
+            mainHandler.post {
+                uploadButton.isEnabled = true
+                uploadButton.alpha = 1f
+                updateTabState()
+                val msg = if (failed == 0) "Uploaded $uploaded file(s)"
+                          else "Uploaded $uploaded, failed $failed"
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                refreshPhotos()
             }
-        )
+        }
+
+        if (files != null) {
+            UploadManager.uploadFiles(this, files, onProgress, onComplete)
+        } else {
+            UploadManager.uploadAll(this, onProgress, onComplete)
+        }
     }
 
     private fun confirmClearAll() {
         val count = adapter.itemCount
         if (count == 0) return
 
-        val what = if (showingQueue) "queued" else "uploaded cache"
+        val message = if (showingQueue) {
+            "This will remove all queued photos and videos."
+        } else {
+            "This only deletes the local cache. To delete from the server, use a computer."
+        }
         AlertDialog.Builder(this)
             .setTitle("Delete all $count items?")
-            .setMessage("This will remove all $what photos and videos.")
+            .setMessage(message)
             .setPositiveButton("Delete All") { _, _ ->
                 if (showingQueue) {
                     UploadManager.getQueueDir(this).listFiles()?.forEach { it.delete() }
