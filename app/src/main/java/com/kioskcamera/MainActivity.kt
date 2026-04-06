@@ -536,6 +536,7 @@ class MainActivity : AppCompatActivity() {
                                     showStatus("Video saved")
                                     updateGalleryThumbnail()
                                     setMode(false)
+                                    promptProjectAfterCapture()
                                 }
                             }
                         } else {
@@ -543,6 +544,7 @@ class MainActivity : AppCompatActivity() {
                             handler.post {
                                 showStatus("Video saved")
                                 updateGalleryThumbnail()
+                                promptProjectAfterCapture()
                             }
                         }
                     }
@@ -834,6 +836,7 @@ class MainActivity : AppCompatActivity() {
                                     showStatus("Photo captured")
                                 }
                                 updateGalleryThumbnail()
+                                if (remaining == 0) promptProjectAfterCapture()
                             }
                         } catch (e: Exception) {
                             image.close()
@@ -890,15 +893,55 @@ class MainActivity : AppCompatActivity() {
 
     // --- Queue Directory ---
 
+    private fun getTempDir(): File {
+        val dir = File(filesDir, "upload_queue/_pending")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
     private fun getQueueDir(): File {
         val project = activeProject
         val dir = if (project != null) {
             File(filesDir, "upload_queue/$project")
         } else {
-            File(filesDir, "upload_queue/_unassigned")
+            // No project: save to pending temp dir
+            return getTempDir()
         }
         if (!dir.exists()) dir.mkdirs()
         return dir
+    }
+
+    private fun movePendingToProject(project: String) {
+        val pending = getTempDir()
+        val dest = File(filesDir, "upload_queue/$project")
+        if (!dest.exists()) dest.mkdirs()
+        pending.listFiles()?.forEach { file ->
+            val target = File(dest, file.name)
+            file.renameTo(target)
+        }
+    }
+
+    private fun promptProjectAfterCapture() {
+        if (activeProject != null) return
+        val pending = getTempDir()
+        val hasPending = pending.listFiles()?.isNotEmpty() == true
+        if (!hasPending) return
+
+        ProjectPickerDialog.show(this, onProjectSelected = { project ->
+            activeProject = project
+            ProjectManager.setActiveProject(this, project)
+            movePendingToProject(project)
+            updateProjectButton()
+            updateGalleryThumbnail()
+            showStatus("Project: $project")
+        }, onDismiss = {
+            activeProject = ProjectManager.getActiveProject(this)
+            if (activeProject != null) {
+                movePendingToProject(activeProject!!)
+            }
+            updateProjectButton()
+            updateGalleryThumbnail()
+        })
     }
 
     private fun haptic(view: View) {

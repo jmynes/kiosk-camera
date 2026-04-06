@@ -16,10 +16,10 @@ android {
 
         buildConfigField("String", "UPLOAD_URL", "\"https://10.99.88.108:8443/upload\"")
         buildConfigField("String", "CERT_PIN", "\"sha256/mBpAW6OasLSk0pf4ab+MNc+IWn2U1rcq5RHES7zMwo0=\"")
-        buildConfigField("String", "SCP_HOST", "\"10.99.88.108\"")
+        buildConfigField("String", "SCP_HOST", "\"172.16.16.31\"")
         buildConfigField("int", "SCP_PORT", "22")
-        buildConfigField("String", "SCP_USER", "\"sysadm\"")
-        buildConfigField("String", "SCP_PATH", "\"/home/sysadm/uploads/\"")
+        buildConfigField("String", "SCP_USER", "\"cui-camera-01\"")
+        buildConfigField("String", "SCP_PATH", "\"/home/cui-camera-01/uploads/\"")
         buildConfigField("boolean", "USE_SCP", "true")
     }
 
