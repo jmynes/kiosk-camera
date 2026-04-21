@@ -326,6 +326,18 @@ class PhotoViewerActivity : AppCompatActivity() {
         private val activity: PhotoViewerActivity
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
+        private val screenWidth = activity.resources.displayMetrics.widthPixels
+
+        private fun screenSampleSize(path: String): Int {
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(path, opts)
+            val imgWidth = maxOf(opts.outWidth, opts.outHeight)
+            // Subsample to ~2x screen width (sharp up to 2x zoom)
+            var sample = 1
+            while (imgWidth / (sample * 2) >= screenWidth) sample *= 2
+            return sample
+        }
+
         companion object {
             private const val TYPE_PHOTO = 0
             private const val TYPE_VIDEO = 1
@@ -360,9 +372,10 @@ class PhotoViewerActivity : AppCompatActivity() {
             val file = files[position]
             when (holder) {
                 is PhotoVH -> {
-                    val bitmap = decodeBitmapWithRotation(file.absolutePath)
                     holder.imageView.resetTransform()
-                    holder.imageView.setImageBitmap(bitmap)
+                    holder.imageView.setImageBitmap(
+                        decodeBitmapWithRotation(file.absolutePath, screenSampleSize(file.absolutePath))
+                    )
                     holder.imageView.onSingleTapCallback = { activity.toggleControls() }
                     holder.imageView.onPagerInputChange = { enabled -> activity.pager.isUserInputEnabled = enabled }
                 }
