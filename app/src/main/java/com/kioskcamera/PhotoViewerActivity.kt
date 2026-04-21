@@ -24,7 +24,7 @@ import java.util.*
 
 class PhotoViewerActivity : AppCompatActivity() {
 
-    private lateinit var pager: ViewPager2
+    lateinit var pager: ViewPager2
     private lateinit var infoText: TextView
     private lateinit var counterText: TextView
     private lateinit var videoSeekBar: SeekBar
@@ -364,6 +364,7 @@ class PhotoViewerActivity : AppCompatActivity() {
                     holder.imageView.resetTransform()
                     holder.imageView.setImageBitmap(bitmap)
                     holder.imageView.onSingleTapCallback = { activity.toggleControls() }
+                    holder.imageView.onPagerInputChange = { enabled -> activity.pager.isUserInputEnabled = enabled }
                 }
                 is VideoVH -> {
                     // Load first frame as thumbnail

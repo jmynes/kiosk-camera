@@ -18,6 +18,7 @@ class ZoomableImageView @JvmOverloads constructor(
 ) : AppCompatImageView(context, attrs) {
 
     var onSingleTapCallback: (() -> Unit)? = null
+    var onPagerInputChange: ((enabled: Boolean) -> Unit)? = null
 
     private val mMatrix = Matrix()
     private val m = FloatArray(9)
@@ -52,7 +53,6 @@ class ZoomableImageView @JvmOverloads constructor(
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
                 mode = ZOOM
                 scaleAnimator?.cancel()
-                parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
 
@@ -63,9 +63,6 @@ class ZoomableImageView @JvmOverloads constructor(
 
             override fun onScaleEnd(detector: ScaleGestureDetector) {
                 mode = DRAG
-                if (saveScale <= minScale) {
-                    parent?.requestDisallowInterceptTouchEvent(false)
-                }
             }
         }).also {
         it.isQuickScaleEnabled = false
@@ -163,12 +160,6 @@ class ZoomableImageView @JvmOverloads constructor(
 
         fixTrans()
         imageMatrix = mMatrix
-
-        if (saveScale > 1.05f) {
-            parent?.requestDisallowInterceptTouchEvent(true)
-        } else {
-            parent?.requestDisallowInterceptTouchEvent(false)
-        }
     }
 
     private fun fixTrans() {
@@ -222,6 +213,37 @@ class ZoomableImageView @JvmOverloads constructor(
     // Velocity tracking for fling
     private var velocityTracker: android.view.VelocityTracker? = null
 
+    // Disable ViewPager2 on touch down to prevent it stealing horizontal
+    // pinch. Re-enable on first single-finger MOVE so swiping works with
+    // no perceptible delay. If a second finger lands before any MOVE,
+    // keep it disabled for the pinch gesture.
+    private var pagerDisabledForGesture = false
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pagerDisabledForGesture = true
+                onPagerInputChange?.invoke(false)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (pagerDisabledForGesture && event.pointerCount == 1 && mode != ZOOM && saveScale <= 1.05f) {
+                    // Single finger moving at default zoom — re-enable pager for swiping
+                    pagerDisabledForGesture = false
+                    onPagerInputChange?.invoke(true)
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // Second finger: keep pager disabled for pinch
+                pagerDisabledForGesture = false
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                pagerDisabledForGesture = false
+                onPagerInputChange?.invoke(true)
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
@@ -243,9 +265,6 @@ class ZoomableImageView @JvmOverloads constructor(
                 mode = DRAG
                 downTime = System.currentTimeMillis()
                 moved = false
-                if (saveScale > 1.05f) {
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (mode == DRAG && saveScale > 1.05f && !scaleDetector.isInProgress) {
