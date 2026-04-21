@@ -4,7 +4,7 @@
 
 ```bash
 # Build
-export ANDROID_HOME=$HOME/android-sdk && export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && ./gradlew assembleDebug
+export ANDROID_HOME=$HOME/Android/Sdk && export JAVA_HOME=/usr/lib/jvm/java-21-openjdk && ./gradlew assembleDebug
 
 # Install
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -58,11 +58,12 @@ kiosk-camera/
 - **`app/build.gradle.kts`** — Upload config as `buildConfigField`: `SCP_HOST`, `SCP_PORT`, `SCP_USER`, `SCP_PATH`, `USE_SCP`, `UPLOAD_URL`, `CERT_PIN`. These are compile-time constants, not user-configurable.
 - **`MainActivity.kt`** — Camera activity. CameraX setup, in-memory capture pipeline with 4-thread save pool and MINIMIZE_LATENCY capture mode, video recording, zoom/flash/timer/night mode, orientation tracking, project picker and active project footer.
 - **`GalleryActivity.kt`** — Queue/Uploaded tabs filtered by active project, thumbnail grid, multi-select with drag, upload FAB with confirmation, project FAB to switch projects, active project footer, FreeKiosk-safe spacers.
-- **`ScpUploader.kt`** — Generates 4096-bit RSA keypair on first run (PKCS#8 PEM). Uploads via SSHJ with BouncyCastle provider. 60s connect timeout for intermittent networks.
+- **`ScpUploader.kt`** — Generates 4096-bit RSA keypair on first run (PKCS#8 PEM, background thread). Uploads via SSHJ with BouncyCastle provider. 60s connect timeout for intermittent networks. `lastError` property surfaces error details to UI.
 - **`ProjectManager.kt`** — Singleton managing project list and active project. Stored in SharedPreferences (`projects` prefs file) as JSON array. Filesystem-safe names: ASCII-only (letters, numbers, dash, underscore, space, dot), 64 char max, case-insensitive dedup. Active project persisted across restarts.
 - **`ProjectPickerDialog.kt`** — Shared dialog used in both camera and gallery. Card UI with scrollable list, active project highlighting (gold border/check), create dialog with input filter, manage dialog with per-project remove and remove-all.
 - **`UploadManager.kt`** — Coordinates uploads. Upload folder structure: `<base>/<year>/<project>/<timestamp>/01_file.jpg` with sequential numbering (2-digit, auto-widens to 3 for 100+ files). Per-project queue dirs under `upload_queue/<project>/`. Copies files to `uploaded_cache/` before deleting from queue. Supports both SCP and HTTPS modes.
-- **`ZoomableImageView.kt`** — Matrix-based zoom/pan with OverScroller fling momentum. Same approach as GrapheneOS Camera. Integrates with ViewPager2 via `canScrollHorizontally`.
+- **`ZoomableImageView.kt`** — Matrix-based zoom/pan with OverScroller fling momentum. Same approach as GrapheneOS Camera. Integrates with ViewPager2 via `canScrollHorizontally`. Disables ViewPager2 paging during multi-touch (pinch) via `onPagerInputChange` callback.
+- **`BitmapUtils.kt`** — EXIF-aware bitmap rotation. `decodeBitmapWithRotation(path, sampleSize)` for subsampled decoding.
 
 ## Upload flow
 
@@ -76,6 +77,15 @@ kiosk-camera/
 - Project list and active project stored in SharedPreferences (`projects` prefs file)
 - Active project persists across app restarts
 - Gallery queue is per-project (`upload_queue/<project>/`); uploaded cache is shared
+
+## Threading model
+
+- **App startup**: SSL cert parsing, HTTP client init, and SCP keypair generation run on background threads (not blocking `onCreate`)
+- **Camera capture**: 4-thread `saveExecutor` pool for parallel disk saves; gallery thumbnail update also on this pool
+- **Gallery**: File listing (`getItems()`) runs on a dedicated IO executor; adapter updated on UI thread when ready
+- **Photo viewer**: Bitmap decoding is synchronous but subsampled to ~2x screen width (sampleSize=2 for Pixel 7). Video thumbnail extraction is async via IO executor.
+- **Uploads**: Single-thread executor in `UploadManager`; SCP/HTTPS runs entirely off UI thread
+- **Pending file moves**: `movePendingToProject()` runs on `saveExecutor`
 
 ## Known issues
 

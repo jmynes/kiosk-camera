@@ -21,7 +21,7 @@ A reference FreeKiosk configuration is included in `freekiosk-config.json`. Key 
 - **Project management** — create, remove, and switch between projects; filesystem-safe names (ASCII only, 64 char max, case-insensitive dedup); project picker with card UI and scrollable list
 - **Gallery** with Queue/Uploaded tabs, Google Photos-style multi-select with drag, filtered by active project
 - **Active project** shown in camera footer and gallery footer; project FAB in gallery to switch projects
-- **Media viewer** with carousel swipe, pinch-to-zoom (Matrix-based, GrapheneOS style), and in-app video playback with scrub bar
+- **Media viewer** with carousel swipe, pinch-to-zoom (Matrix-based, GrapheneOS style), in-app video playback with scrub bar, and batch/project info for uploaded files
 - **Flash** (off / auto / on), **Timer** (off / 3s / 10s), **Night mode** (CameraX extension)
 - **Camera flip** (front / back), **Grid overlay**, **Exposure compensation** (double-tap)
 - **Volume buttons** as shutter trigger (tap for photo, hold for video)
@@ -30,6 +30,8 @@ A reference FreeKiosk configuration is included in `freekiosk-config.json`. Key 
 - **HTTPS upload** alternative with certificate pinning
 - **Upload confirmation dialogs** with one-way transfer warnings
 - **Disk-backed thumbnail cache** for instant gallery loading
+- **Upload error reporting** — SCP failures show the actual error message in a dialog (auth failure, connection refused, etc.)
+- **Background threading** — RSA key generation, SSL setup, gallery file listing, thumbnail loading, and file moves all run off the UI thread
 
 ## Build
 
@@ -38,8 +40,8 @@ Requirements:
 - Android SDK (API 34)
 
 ```bash
-export ANDROID_HOME=$HOME/android-sdk
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_HOME=$HOME/Android/Sdk
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk
 ./gradlew assembleDebug
 ```
 
@@ -64,17 +66,17 @@ adb shell monkey -p com.kioskcamera -c android.intent.category.LAUNCHER 1
 Upload settings are **build-time constants** in `app/build.gradle.kts` (not user-configurable):
 
 ```kotlin
-buildConfigField("String", "SCP_HOST", "\"10.99.88.108\"")
+buildConfigField("String", "SCP_HOST", "\"172.16.16.31\"")
 buildConfigField("int", "SCP_PORT", "22")
-buildConfigField("String", "SCP_USER", "\"sysadm\"")
-buildConfigField("String", "SCP_PATH", "\"/home/sysadm/uploads/\"")
+buildConfigField("String", "SCP_USER", "\"cui-camera-01\"")
+buildConfigField("String", "SCP_PATH", "\"/home/cui-camera-01/uploads/\"")
 buildConfigField("boolean", "USE_SCP", "true")
 ```
 
 ### SCP Setup
 
-1. Launch the app once — it generates an RSA keypair and logs the public key
-2. Extract the public key: `adb logcat -d | grep "Public key: ssh-rsa"`
+1. Launch the app once — it generates an RSA keypair in the background
+2. Extract the public key: `adb shell run-as com.kioskcamera cat files/ssh_keys/id_rsa.pub`
 3. Add it to the server: `echo "<key>" | ssh user@server "cat >> ~/.ssh/authorized_keys"`
 4. Create a project in the app, then upload via the gallery's upload button (floating blue FAB). Files are uploaded to `<SCP_PATH>/<year>/<project>/<timestamp>/` with sequential numbering.
 
