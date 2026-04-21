@@ -327,6 +327,7 @@ class PhotoViewerActivity : AppCompatActivity() {
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         private val screenWidth = activity.resources.displayMetrics.widthPixels
+        private val ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
         private fun screenSampleSize(path: String): Int {
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -380,16 +381,21 @@ class PhotoViewerActivity : AppCompatActivity() {
                     holder.imageView.onPagerInputChange = { enabled -> activity.pager.isUserInputEnabled = enabled }
                 }
                 is VideoVH -> {
-                    // Load first frame as thumbnail
-                    try {
-                        val retriever = MediaMetadataRetriever()
-                        retriever.setDataSource(file.absolutePath)
-                        val frame = retriever.getFrameAtTime(0)
-                        holder.thumbnail.setImageBitmap(frame)
-                        holder.thumbnail.visibility = View.VISIBLE
-                        retriever.release()
-                    } catch (e: Exception) {
-                        holder.thumbnail.visibility = View.GONE
+                    // Load first frame as thumbnail off UI thread
+                    holder.thumbnail.setImageBitmap(null)
+                    holder.thumbnail.visibility = View.VISIBLE
+                    val path = file.absolutePath
+                    holder.thumbnail.tag = path
+                    ioExecutor.execute {
+                        try {
+                            val retriever = MediaMetadataRetriever()
+                            retriever.setDataSource(path)
+                            val frame = retriever.getFrameAtTime(0)
+                            retriever.release()
+                            if (holder.thumbnail.tag == path) {
+                                activity.runOnUiThread { holder.thumbnail.setImageBitmap(frame) }
+                            }
+                        } catch (_: Exception) {}
                     }
 
                     holder.videoView.visibility = View.INVISIBLE

@@ -21,8 +21,10 @@ object ScpUploader {
 
     private var keyDir: File? = null
 
+    private val initExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     fun init(context: Context) {
-        // Register BouncyCastle provider for SSHJ
+        // Register BouncyCastle provider for SSHJ (fast, stays on main thread)
         java.security.Security.removeProvider("BC")
         java.security.Security.insertProviderAt(
             org.bouncycastle.jce.provider.BouncyCastleProvider(), 1
@@ -31,9 +33,9 @@ object ScpUploader {
         keyDir = File(context.filesDir, "ssh_keys")
         keyDir!!.mkdirs()
         if (!File(keyDir, KEY_FILE).exists()) {
-            generateKeyPair()
+            // 4096-bit RSA keygen is expensive — run in background
+            initExecutor.execute { generateKeyPair() }
         }
-
     }
 
     private fun generateKeyPair() {

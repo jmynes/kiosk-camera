@@ -172,9 +172,14 @@ class MainActivity : AppCompatActivity() {
         recordingTimer = findViewById(R.id.recordingTimer)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
-        httpClient = createHttpClient()
-        ScpUploader.init(this)
         initSounds()
+
+        // Heavy init (SSL, RSA keygen) off the UI thread
+        Thread {
+            httpClient = createHttpClient()
+            UploadManager.init(httpClient)
+            ScpUploader.init(this)
+        }.start()
 
         setupZoomGesture()
         setupControls()
@@ -188,8 +193,6 @@ class MainActivity : AppCompatActivity() {
                 arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
                 CAMERA_PERMISSION_CODE)
         }
-
-        UploadManager.init(httpClient)
     }
 
     override fun onResume() {
@@ -861,33 +864,39 @@ class MainActivity : AppCompatActivity() {
     private var lastThumbnailPath: String? = null
 
     private fun updateGalleryThumbnail() {
-        val files = getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
-            ?.sortedByDescending { it.lastModified() }
-        if (files != null && files.isNotEmpty()) {
-            val first = files[0]
-            val isNew = first.absolutePath != lastThumbnailPath
-            lastThumbnailPath = first.absolutePath
+        saveExecutor.execute {
+            val files = getQueueDir().listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
+                ?.sortedByDescending { it.lastModified() }
+            if (files != null && files.isNotEmpty()) {
+                val first = files[0]
+                val isNew = first.absolutePath != lastThumbnailPath
+                lastThumbnailPath = first.absolutePath
 
-            if (first.extension == "jpg") {
-                val bitmap = decodeBitmapWithRotation(first.absolutePath, sampleSize = 8)
-                if (isNew) {
-                    galleryButton.translationY = -galleryButton.height.toFloat()
-                    galleryButton.setImageBitmap(bitmap)
-                    galleryButton.animate()
-                        .translationY(0f)
-                        .setDuration(200)
-                        .setInterpolator(android.view.animation.DecelerateInterpolator())
-                        .start()
+                if (first.extension == "jpg") {
+                    val bitmap = decodeBitmapWithRotation(first.absolutePath, sampleSize = 8)
+                    runOnUiThread {
+                        if (isNew) {
+                            galleryButton.translationY = -galleryButton.height.toFloat()
+                            galleryButton.setImageBitmap(bitmap)
+                            galleryButton.animate()
+                                .translationY(0f)
+                                .setDuration(200)
+                                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                                .start()
+                        } else {
+                            galleryButton.setImageBitmap(bitmap)
+                        }
+                    }
                 } else {
-                    galleryButton.setImageBitmap(bitmap)
+                    runOnUiThread {
+                        galleryButton.setImageDrawable(null)
+                        galleryButton.setBackgroundResource(R.drawable.gallery_button_bg)
+                    }
                 }
             } else {
-                galleryButton.setImageDrawable(null)
-                galleryButton.setBackgroundResource(R.drawable.gallery_button_bg)
+                lastThumbnailPath = null
+                runOnUiThread { galleryButton.setImageDrawable(null) }
             }
-        } else {
-            lastThumbnailPath = null
-            galleryButton.setImageDrawable(null)
         }
     }
 
@@ -912,12 +921,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun movePendingToProject(project: String) {
-        val pending = getTempDir()
-        val dest = File(filesDir, "upload_queue/$project")
-        if (!dest.exists()) dest.mkdirs()
-        pending.listFiles()?.forEach { file ->
-            val target = File(dest, file.name)
-            file.renameTo(target)
+        saveExecutor.execute {
+            val pending = getTempDir()
+            val dest = File(filesDir, "upload_queue/$project")
+            if (!dest.exists()) dest.mkdirs()
+            pending.listFiles()?.forEach { file ->
+                val target = File(dest, file.name)
+                file.renameTo(target)
+            }
+            runOnUiThread { updateGalleryThumbnail() }
         }
     }
 

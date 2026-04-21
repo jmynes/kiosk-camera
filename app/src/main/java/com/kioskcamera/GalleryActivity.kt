@@ -87,13 +87,13 @@ class GalleryActivity : AppCompatActivity() {
             }
         }
         recyclerView.layoutManager = gridLayoutManager
-        adapter = GalleryAdapter(getItems())
+        adapter = GalleryAdapter(mutableListOf())
         recyclerView.adapter = adapter
 
         setupDragSelect()
         updateTabState()
         updateProjectFab()
-        updateEmptyState()
+        refreshPhotos()
     }
 
     override fun onResume() {
@@ -275,10 +275,17 @@ class GalleryActivity : AppCompatActivity() {
         }
     }
 
+    private val ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     private fun refreshPhotos() {
-        adapter.updateItems(getItems())
-        updateEmptyState()
-        updateProjectFab()
+        ioExecutor.execute {
+            val items = getItems()
+            runOnUiThread {
+                adapter.updateItems(items)
+                updateEmptyState()
+                updateProjectFab()
+            }
+        }
     }
 
     private fun updateEmptyState() {
