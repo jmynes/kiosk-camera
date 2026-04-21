@@ -38,6 +38,8 @@ class PhotoViewerActivity : AppCompatActivity() {
     private var controlsVisible = true
     private lateinit var topBar: View
     private lateinit var bottomContainer: View
+    private lateinit var batchInfoText: TextView
+    private var isUploadedSource = false
 
     private val currentIndex: Int get() = pager.currentItem
 
@@ -52,6 +54,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
         pager = findViewById(R.id.photoPager)
         infoText = findViewById(R.id.photoInfo)
+        batchInfoText = findViewById(R.id.batchInfo)
         counterText = findViewById(R.id.photoCounter)
         videoSeekBar = findViewById(R.id.videoSeekBar)
         videoTimeText = findViewById(R.id.videoTimeText)
@@ -87,7 +90,8 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     private fun loadMedia(startPath: String) {
         val sourceDir = intent.getStringExtra("source_dir") ?: "queue"
-        mediaFiles = if (sourceDir == "uploaded") {
+        isUploadedSource = sourceDir == "uploaded"
+        mediaFiles = if (isUploadedSource) {
             UploadManager.getUploadedFiles(this).toMutableList()
         } else {
             val project = ProjectManager.getActiveProject(this)
@@ -179,6 +183,26 @@ class PhotoViewerActivity : AppCompatActivity() {
         val type = if (isVideo) "Video" else "Photo"
         infoText.text = "$type  •  ${sdf.format(Date(file.lastModified()))}  •  $sizeStr"
         counterText.text = "${position + 1} / ${mediaFiles.size}"
+
+        // Show batch/project info for uploaded files
+        if (isUploadedSource) {
+            val metaFile = java.io.File(file.parentFile, ".batch_meta")
+            val project = if (metaFile.exists()) metaFile.readText().trim() else null
+            val batchDir = file.parentFile?.name ?: ""
+            val batchTime = try {
+                val parsed = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).parse(batchDir)
+                SimpleDateFormat("MMM d, h:mm a", Locale.US).format(parsed!!)
+            } catch (_: Exception) { null }
+            val parts = listOfNotNull(project, batchTime)
+            if (parts.isNotEmpty()) {
+                batchInfoText.text = parts.joinToString("  •  ")
+                batchInfoText.visibility = View.VISIBLE
+            } else {
+                batchInfoText.visibility = View.GONE
+            }
+        } else {
+            batchInfoText.visibility = View.GONE
+        }
 
         videoSeekBar.visibility = if (isVideo) View.VISIBLE else View.GONE
         videoTimeText.visibility = if (isVideo) View.VISIBLE else View.GONE
