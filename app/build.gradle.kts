@@ -11,8 +11,8 @@ android {
         applicationId = "com.kioskcamera"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 5
+        versionName = "0.5.0"
 
         buildConfigField("String", "UPLOAD_URL", "\"https://10.99.88.108:8443/upload\"")
         buildConfigField("String", "CERT_PIN", "\"sha256/mBpAW6OasLSk0pf4ab+MNc+IWn2U1rcq5RHES7zMwo0=\"")
