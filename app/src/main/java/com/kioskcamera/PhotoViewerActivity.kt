@@ -87,14 +87,15 @@ class PhotoViewerActivity : AppCompatActivity() {
 
     private fun loadMedia(startPath: String) {
         val sourceDir = intent.getStringExtra("source_dir") ?: "queue"
-        val queueDir = if (sourceDir == "uploaded") {
-            UploadManager.getUploadedDir(this)
+        mediaFiles = if (sourceDir == "uploaded") {
+            val dir = UploadManager.getUploadedDir(this)
+            dir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
+                ?.sortedByDescending { it.lastModified() }
+                ?.toMutableList() ?: mutableListOf()
         } else {
-            UploadManager.getQueueDir(this)
+            val project = ProjectManager.getActiveProject(this)
+            UploadManager.getFilesForProject(this, project).toMutableList()
         }
-        mediaFiles = queueDir.listFiles { f -> f.extension == "jpg" || f.extension == "mp4" }
-            ?.sortedByDescending { it.lastModified() }
-            ?.toMutableList() ?: mutableListOf()
 
         val startIndex = mediaFiles.indexOfFirst { it.absolutePath == startPath }.coerceAtLeast(0)
 
