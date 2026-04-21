@@ -213,31 +213,20 @@ class ZoomableImageView @JvmOverloads constructor(
     // Velocity tracking for fling
     private var velocityTracker: android.view.VelocityTracker? = null
 
-    // Disable ViewPager2 on touch down to prevent it stealing horizontal
-    // pinch. Re-enable on first single-finger MOVE so swiping works with
-    // no perceptible delay. If a second finger lands before any MOVE,
-    // keep it disabled for the pinch gesture.
-    private var pagerDisabledForGesture = false
-
+    // 1 finger = swipe (pager enabled) or pan (if zoomed)
+    // 2 fingers = pinch (pager disabled)
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                pagerDisabledForGesture = true
+            MotionEvent.ACTION_POINTER_DOWN -> {
                 onPagerInputChange?.invoke(false)
             }
-            MotionEvent.ACTION_MOVE -> {
-                if (pagerDisabledForGesture && event.pointerCount == 1 && mode != ZOOM && saveScale <= 1.05f) {
-                    // Single finger moving at default zoom — re-enable pager for swiping
-                    pagerDisabledForGesture = false
+            MotionEvent.ACTION_POINTER_UP -> {
+                // Back to 1 finger — re-enable pager after pinch
+                if (event.pointerCount <= 2) {
                     onPagerInputChange?.invoke(true)
                 }
             }
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                // Second finger: keep pager disabled for pinch
-                pagerDisabledForGesture = false
-            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                pagerDisabledForGesture = false
                 onPagerInputChange?.invoke(true)
             }
         }
