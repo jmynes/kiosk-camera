@@ -92,11 +92,15 @@ object ScpUploader {
         return uploadFileAs(file, file.name, host, port, username, remotePath)
     }
 
+    var lastError: String? = null
+        private set
+
     fun uploadBatch(
         files: List<Pair<File, String>>, // file to remote filename
         host: String, port: Int, username: String, remotePath: String,
         onProgress: ((String) -> Unit)? = null
     ): Pair<Int, Int> {
+        lastError = null
         val dir = keyDir ?: return Pair(0, files.size)
         val privKeyFile = File(dir, KEY_FILE)
         if (!privKeyFile.exists()) return Pair(0, files.size)
@@ -133,11 +137,13 @@ object ScpUploader {
                     Log.i(TAG, "SCP uploaded: $remoteName to $host:$dest")
                 } catch (e: Exception) {
                     failed++
+                    lastError = "Upload failed: ${e.message}"
                     Log.e(TAG, "SCP upload failed for $remoteName: ${e.message}")
                     break
                 }
             }
         } catch (e: Exception) {
+            lastError = "${e.javaClass.simpleName}: ${e.message}"
             Log.e(TAG, "SCP connection failed: ${e.javaClass.simpleName}: ${e.message}")
             failed = files.size - uploaded
         } finally {

@@ -343,9 +343,16 @@ class GalleryActivity : AppCompatActivity() {
                 uploadButton.isEnabled = true
                 uploadButton.alpha = 1f
                 updateTabState()
-                val msg = if (failed == 0) "Uploaded $uploaded to \"$project\""
-                          else "Uploaded $uploaded, failed $failed"
-                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                if (failed == 0) {
+                    Toast.makeText(this, "Uploaded $uploaded to \"$project\"", Toast.LENGTH_LONG).show()
+                } else {
+                    val reason = ScpUploader.lastError ?: "Unknown error"
+                    AlertDialog.Builder(this)
+                        .setTitle("Upload failed")
+                        .setMessage("$reason\n\nUploaded $uploaded, failed $failed")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
                 refreshPhotos()
             }
         }
